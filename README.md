@@ -24,7 +24,8 @@ Mac 內建 python3，不需要安裝任何東西。**在蘭嶼沒有網路也照
 | 位置 | 角色 |
 |---|---|
 | `~/Projects/japanese-reader` | **工作副本**，平常在這裡改東西。在電腦內接硬碟，離線可用 |
-| `/Volumes/公共空間/Share/japanese-reader` | **NAS 上的備份**，只有回到家連得到 NAS 時才同步 |
+| `/Volumes/公共空間/Share/japanese-reader` | NAS 上**可瀏覽的檔案鏡像** |
+| `/Volumes/公共空間/Share/japanese-reader.git` | NAS 上的 **git 備份**（含完整歷史） |
 
 ### 出門在外（例如蘭嶼）
 照常改程式，改完存檔就好。想留一個進度紀錄就 commit：
@@ -34,12 +35,16 @@ Mac 內建 python3，不需要安裝任何東西。**在蘭嶼沒有網路也照
 完全不需要網路，也不需要 NAS。
 
 ### 回家後同步回 NAS
-連上 NAS 之後，在 `~/Projects/japanese-reader` 執行：
+連上 NAS 之後，在專案資料夾執行：
 
-    git push nas main
+    ./sync-to-nas.sh
 
-NAS 上的資料夾會自動更新成最新版（已設定 `receive.denyCurrentBranch=updateInstead`），
-可以直接在 NAS 上瀏覽檔案，不是只有 git 資料。
+它會把 git 歷史推到 NAS 的 `japanese-reader.git`，再把檔案鏡像到 `japanese-reader/` 資料夾
+（後者可以在 Finder 或手機上直接瀏覽）。沒連到 NAS 時它會直接告訴你，不會做半套。
+
+> 為什麼不是單純 `git push`：NAS 的 SMB 掛載上，git 的 `receive-pack` 不會讀該 repo 的
+> `.git/config`，`receive.denyCurrentBranch` 設了也沒用，推不進有 checkout 的 repo。
+> 改用 bare repo 收 push 就完全避開這個問題。
 
 ## 程式結構
 
@@ -51,6 +56,7 @@ NAS 上的資料夾會自動更新成最新版（已設定 `receive.denyCurrentB
       furigana.js       讀音對齊演算法（核心）
       pos.js            詞性正規化與分類
       render.js         tokens → DOM
+    sync-to-nas.sh      回家後一鍵同步回 NAS
     vendor/kuromoji/    kuromoji 0.1.2 + 字典（17 MB，離線用）
 
 ## 進度
