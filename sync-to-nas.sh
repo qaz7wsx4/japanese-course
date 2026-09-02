@@ -1,0 +1,29 @@
+#!/bin/bash
+# 回到家、連得上 NAS 時執行這支，把進度同步回 NAS。
+# 做兩件事：推 git 歷史到 NAS 的 bare repo，並把檔案鏡像到可直接瀏覽的資料夾。
+set -e
+cd "$(dirname "$0")"
+
+SHARE="/Volumes/公共空間/Share"
+NAS_REPO="$SHARE/japanese-reader.git"
+NAS_FILES="$SHARE/japanese-reader"
+
+if [ ! -d "$NAS_REPO" ]; then
+  echo "連不到 NAS（找不到 $NAS_REPO）。"
+  echo "請先在 Finder 掛載 10.0.0.57 的「公共空間」共享資料夾，再執行一次。"
+  exit 1
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "有還沒 commit 的修改，請先 commit："
+  git status --short
+  exit 1
+fi
+
+echo "→ 推送 git 歷史到 NAS…"
+git push nas main
+
+echo "→ 鏡像檔案到 NAS 資料夾…"
+rsync -a --delete --exclude '.git' --exclude '.DS_Store' ./ "$NAS_FILES/"
+
+echo "同步完成。NAS 上已是最新版。"
