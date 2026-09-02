@@ -175,8 +175,15 @@ button.ghost { background: var(--surface); color: var(--muted); }
   padding-bottom: 2px;
 }
 
+ruby {
+  /* 讀音比詞面寬時（例：勉強／べんきょう），瀏覽器預設會把漢字攤開，
+     看起來像詞被拆開了。改成 center 讓多出的寬度平均放到兩側。 */
+  ruby-align: center;
+}
+
 rt {
   font-size: 0.5em;
+  white-space: nowrap;
   font-weight: 400;
   color: var(--muted);
   user-select: none;
