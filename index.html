@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>日文閱讀輔助</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>日文閱讀輔助</h1>
+  <label class="toggle" id="kanaToggleWrap" hidden>
+    <input type="checkbox" id="kanaToggle" checked>
+    <span>顯示假名</span>
+  </label>
+</header>
+
+<main>
+  <!-- 字典載入狀態 -->
+  <section class="loading" id="loading">
+    <div class="loading-title" id="loadingTitle">正在載入日文字典…</div>
+    <div class="bar"><div class="bar-fill" id="barFill"></div></div>
+    <div class="loading-note" id="loadingNote">首次載入約 17 MB，之後會快取。載入期間可以先貼上文章。</div>
+  </section>
+
+  <!-- 輸入 -->
+  <section class="input-area">
+    <textarea id="input" rows="4" placeholder="在這裡貼上日文…"></textarea>
+    <div class="btn-row">
+      <button id="analyzeBtn" class="primary" disabled>解析</button>
+      <button id="sampleBtn" class="ghost">範例</button>
+      <button id="clearBtn" class="ghost">清除</button>
+    </div>
+  </section>
+
+  <!-- 詞性圖例 -->
+  <section class="legend" id="legend" hidden></section>
+
+  <!-- 輸出 -->
+  <section class="output" id="output"></section>
+</main>
+
+<script src="vendor/kuromoji/kuromoji.js"></script>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

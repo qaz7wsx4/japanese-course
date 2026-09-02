@@ -1,0 +1,208 @@
+/* ── 色票 ───────────────────────────────────────────────── */
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --text: #1f2124;
+  --muted: #6b7078;
+  --border: #e2e3e6;
+  --accent: #2f6fb0;
+
+  --pos-noun: #3b73b9;
+  --pos-verb: #c2622a;
+  --pos-particle: #8a8f98;
+  --pos-particle-bg: #8a8f9818;
+  --pos-adj: #2f8f5b;
+  --pos-adverb: #8b5cb8;
+  --pos-aux: #d09a63;
+  --pos-other: #a8adb4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a;
+    --surface: #202225;
+    --text: #e8e9ea;
+    --muted: #9aa0a6;
+    --border: #33363a;
+    --accent: #6fa8e0;
+
+    --pos-noun: #7aaee8;
+    --pos-verb: #e89a5f;
+    --pos-particle: #9aa0a6;
+    --pos-particle-bg: #9aa0a61f;
+    --pos-adj: #63c48c;
+    --pos-adverb: #b592e0;
+    --pos-aux: #e0bb8a;
+    --pos-other: #7d8288;
+  }
+}
+
+/* ── 基本版面（手機優先）─────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "PingFang TC", "Noto Sans TC", sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 12px 16px calc(32px + env(safe-area-inset-bottom));
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px calc(10px);
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar h1 { font-size: 16px; font-weight: 600; margin: 0; }
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+/* ── 載入狀態 ──────────────────────────────────────────── */
+.loading {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.loading.error { border-color: var(--pos-verb); }
+.loading-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.loading-note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+.bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.15s linear;
+}
+
+/* ── 輸入 ──────────────────────────────────────────────── */
+textarea {
+  width: 100%;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 16px;          /* 16px 以下 iOS Safari 會自動放大頁面 */
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  resize: vertical;
+}
+textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.btn-row { display: flex; gap: 8px; margin-top: 10px; }
+
+button {
+  font-family: inherit;
+  font-size: 15px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  min-height: 44px;         /* 手機好點 */
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  flex: 1;
+}
+button.primary:disabled { opacity: 0.45; cursor: default; }
+button.ghost { background: var(--surface); color: var(--muted); }
+
+/* ── 詞性圖例 ──────────────────────────────────────────── */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 16px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── 輸出 ──────────────────────────────────────────────── */
+.output {
+  margin-top: 12px;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+               "Noto Sans JP", sans-serif;
+  font-size: 21px;
+  line-height: 2.3;         /* 留空間給 ruby，行距要夠寬 */
+}
+.line { margin: 0 0 14px; }
+
+.tok {
+  /* 用 inline 而非 inline-block：inline-block 會把 ruby 的高度算進盒子，
+     底線被推得離文字很遠、助詞底色也會變成一整塊高矩形。 */
+  display: inline;
+  white-space: nowrap;          /* 一個詞不要被拆到兩行 */
+  border-bottom: 2px solid transparent;
+  padding-bottom: 2px;
+}
+
+rt {
+  font-size: 0.5em;
+  font-weight: 400;
+  color: var(--muted);
+  user-select: none;
+}
+
+/* 隱藏假名時用 visibility，保留佔位空間，切換時文字不會跳動 */
+body.hide-kana rt { visibility: hidden; }
+
+/* ── 詞性上色 ──────────────────────────────────────────── */
+/* 只畫底線不整字上色，避免蓋掉 ruby 的可讀性 */
+.pos-noun     { border-bottom-color: var(--pos-noun); }
+.pos-verb     { border-bottom-color: var(--pos-verb); }
+.pos-adj-i    { border-bottom-color: var(--pos-adj); }
+.pos-adj-na   { border-bottom-color: var(--pos-adj); border-bottom-style: dashed; }
+.pos-adverb   { border-bottom-color: var(--pos-adverb); }
+.pos-aux      { border-bottom-color: var(--pos-aux); border-bottom-style: dotted; }
+.pos-other    { border-bottom-color: var(--pos-other); }
+/* 助詞是 N5 的核心痛點，額外加一點底色讓句子結構一眼看得出來 */
+.pos-particle {
+  border-bottom-color: var(--pos-particle);
+  background: var(--pos-particle-bg);
+  border-radius: 2px;
+}
+.pos-symbol   { border-bottom-color: transparent; }
+
+.legend-item {
+  border-bottom: 2px solid transparent;
+  padding-bottom: 1px;
+}
