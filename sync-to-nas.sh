@@ -36,6 +36,26 @@ if [ -d "/Volumes/web" ]; then
     --exclude '.git' --exclude '.DS_Store' --exclude 'README.md' \
     --exclude 'sync-to-nas.sh' --exclude '.gitignore' --exclude '日文閱讀器_交接.md' \
     ./ "$WEB_ROOT/"
+  # 蓋掉瀏覽器快取：把所有本地資源加上這次部署的版本號。
+  # 不做的話，手機會一直拿到舊的 css/js，改了看不到效果。
+  VER=$(date +%Y%m%d%H%M%S)
+  python3 - "$WEB_ROOT" "$VER" <<'PYEOF'
+import os, sys
+root, ver = sys.argv[1], sys.argv[2]
+n = 0
+for dirpath, _, names in os.walk(root):
+    if 'vendor' in dirpath:
+        continue
+    for name in names:
+        if not name.endswith(('.html', '.js')):
+            continue
+        f = os.path.join(dirpath, name)
+        s = open(f, encoding='utf-8').read()
+        if '?v=DEV' in s:
+            open(f, 'w', encoding='utf-8').write(s.replace('?v=DEV', '?v=' + ver))
+            n += 1
+print(f'   已為 {n} 個檔案標記版本 {ver}')
+PYEOF
   echo "   網站已更新：http://10.0.0.57/japanese/"
 else
   echo "→ 略過網站部署（web 共享資料夾未掛載）"

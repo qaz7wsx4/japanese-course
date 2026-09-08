@@ -1,6 +1,6 @@
 // tokens → DOM。用 DOM API 建節點而非字串拼接，避免原文裡的 < & 造成問題。
 
-import { POS_CATEGORIES } from './pos.js';
+import { POS_CATEGORIES } from './pos.js?v=DEV';
 
 export function renderLines(container, lines) {
   container.replaceChildren();

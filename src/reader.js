@@ -1,5 +1,5 @@
-import { loadTokenizer, analyze } from './tokenizer.js';
-import { renderLines, renderLegend } from './render.js';
+import { loadTokenizer, analyze } from './tokenizer.js?v=DEV';
+import { renderLines, renderLegend } from './render.js?v=DEV';
 
 const $ = (id) => document.getElementById(id);
 

@@ -2,10 +2,19 @@
 // 字典放在本地 vendor/ 底下：一來 kuromoji 內部用 path.join 組網址，
 // 會把 CDN 的 https:// 壓成 https:/ 而載入失敗；二來本地檔可離線使用。
 
-import { toRuby, toHiragana } from './furigana.js';
-import { classify } from './pos.js';
+import { toRuby, toHiragana } from './furigana.js?v=DEV';
+import { classify } from './pos.js?v=DEV';
 
 const DICT_PATH = 'vendor/kuromoji/dict';
+
+// 讀音覆寫。kuromoji 用的是 IPA 字典，有些詞它給的讀音跟教學慣用的不一樣，
+// 甚至會讀錯（何時 被讀成 いつ）。課程內容必須跟標音一致，否則會教錯。
+// 只覆寫這份教材確定會用到、且語境單一的詞。
+const READING_OVERRIDES = {
+  '日本人': 'にほんじん',   // kuromoji: にっぽんじん
+  '何時': 'なんじ',         // kuromoji: いつ ← 這裡是「幾點」
+  '家': 'うち',             // kuromoji: いえ；N5 講「自己家」用 うち
+};
 
 // 各字典檔的實際大小，用來算載入進度。
 const FILE_SIZES = {
@@ -111,12 +120,13 @@ function canAttach(prev, t) {
 
 function normalize(t) {
   const surface = t.surface_form;
-  const reading = t.reading && t.reading !== '*' ? t.reading : '';
+  const raw = t.reading && t.reading !== '*' ? t.reading : '';
+  const reading = READING_OVERRIDES[surface] || toHiragana(raw);
   const pos = classify(t);
 
   return {
     surface,
-    reading: toHiragana(reading),
+    reading,
     basic: t.basic_form && t.basic_form !== '*' ? t.basic_form : surface,
     pos: pos.id,
     posLabel: pos.label,

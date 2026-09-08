@@ -213,3 +213,185 @@ body.hide-kana rt { visibility: hidden; }
   border-bottom: 2px solid transparent;
   padding-bottom: 1px;
 }
+
+/* ═══════════════════════════════════════════════════════
+   課程 App
+   ═══════════════════════════════════════════════════════ */
+
+.topbar h1 { flex: 1; }
+
+.back {
+  min-height: 0;
+  padding: 6px 12px;
+  font-size: 18px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--accent);
+}
+
+.home-link { color: var(--accent); text-decoration: none; font-size: 14px; }
+
+.app-footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.app-footer a { color: var(--muted); font-size: 13px; text-decoration: none; }
+
+/* 日文片段（課程內容用；.output 是自由閱讀那頁用的） */
+.jp {
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+               "Noto Sans JP", sans-serif;
+  font-size: 20px;
+  line-height: 2.2;
+}
+.jp .line { margin: 0; }
+
+.summary { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 16px; line-height: 1.6; }
+
+/* ── 課程卡片 ── */
+.lesson-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+  min-height: 0;
+}
+.lesson-card.locked { opacity: 0.45; }
+.lesson-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.lesson-no { font-size: 12px; color: var(--muted); font-weight: 600; }
+.badge {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.badge.done { color: var(--pos-adj); border-color: var(--pos-adj); }
+.lesson-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+.lesson-pattern {
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.lesson-h2 { font-size: 20px; margin: 4px 0 4px; }
+.goal { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0 0 16px; }
+
+/* ── 分頁 ── */
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tab {
+  flex: 1;
+  min-height: 40px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+button.wide { width: 100%; margin-top: 14px; }
+
+/* ── 單字 ── */
+.vocab-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.vocab-jp { flex-shrink: 0; }
+.vocab-meta { text-align: right; }
+.vocab-kana {
+  display: block;
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 12px;
+  color: var(--muted);
+}
+.vocab-zh { font-size: 15px; }
+
+/* ── 文法 ── */
+.grammar-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.grammar-pattern {
+  font-family: "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.grammar-summary { font-size: 15px; margin-bottom: 8px; }
+.grammar-detail { font-size: 13.5px; color: var(--muted); line-height: 1.85; }
+.example {
+  margin-top: 14px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+.example-zh { font-size: 13px; color: var(--muted); margin-top: -4px; }
+
+/* ── 練習 ── */
+.quiz-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.quiz-bar-fill { height: 100%; background: var(--accent); transition: width 0.2s; }
+.quiz-count { font-size: 12px; color: var(--muted); margin: 8px 0 20px; }
+.quiz-title { font-size: 16px; font-weight: 600; margin-bottom: 14px; }
+.quiz-title.review { color: var(--pos-adverb); }
+.quiz-jp { font-size: 26px; margin-bottom: 8px; }
+.quiz-zh { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+
+.choices { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.choice {
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 16px;
+}
+.choice .jp { font-size: 19px; line-height: 1.9; }
+.choice.correct { border-color: var(--pos-adj); background: color-mix(in srgb, var(--pos-adj) 14%, var(--surface)); }
+.choice.wrong { border-color: var(--pos-verb); background: color-mix(in srgb, var(--pos-verb) 14%, var(--surface)); }
+.choice:disabled { opacity: 1; }
+
+/* ── 排列組句 ── */
+.order-built {
+  min-height: 64px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.order-built.correct { border-color: var(--pos-adj); border-style: solid; }
+.order-built.wrong { border-color: var(--pos-verb); border-style: solid; }
+.order-hint { font-size: 13px; color: var(--muted); }
+.order-chip { font-size: 19px; }
+.order-pool { flex-direction: row; flex-wrap: wrap; }
+.order-pool .choice {
+  width: auto;
+  padding: 8px 12px;
+}
+.choice.used { opacity: 0.3; }
+.order-answer { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.order-answer-label { display: block; margin-bottom: 2px; }
+
+/* ── 結果 ── */
+.result-pct { font-size: 52px; font-weight: 700; text-align: center; margin-top: 20px; }
+.result-detail { text-align: center; color: var(--muted); font-size: 14px; }
+.result-msg { text-align: center; font-size: 15px; margin: 20px 0 24px; line-height: 1.7; }
