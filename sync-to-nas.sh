@@ -4,14 +4,20 @@
 set -e
 cd "$(dirname "$0")"
 
-SHARE="/Volumes/公共空間/Share"
-NAS_REPO="$SHARE/japanese-reader.git"
-NAS_FILES="$SHARE/japanese-reader"
-WEB_ROOT="/Volumes/web/japanese"      # Web Station 的網站位置
+# NAS 的實際路徑放在 nas.conf（不進版控）。第一次用請複製 nas.conf.example。
+if [ ! -f nas.conf ]; then
+  echo "找不到 nas.conf。請先執行：cp nas.conf.example nas.conf，再填入你的 NAS 路徑。"
+  exit 1
+fi
+. ./nas.conf
+
+NAS_REPO="$NAS_SHARE/japanese-reader.git"
+NAS_FILES="$NAS_SHARE/japanese-reader"
+WEB_ROOT="$NAS_WEB_ROOT"
 
 if [ ! -d "$NAS_REPO" ]; then
   echo "連不到 NAS（找不到 $NAS_REPO）。"
-  echo "請先在 Finder 掛載 10.0.0.57 的「公共空間」共享資料夾，再執行一次。"
+  echo "請先在 Finder 掛載 NAS 的共享資料夾，再執行一次。"
   exit 1
 fi
 
@@ -29,7 +35,7 @@ rsync -a --delete --exclude '.git' --exclude '.DS_Store' ./ "$NAS_FILES/"
 
 # 網站部署：web 共享資料夾是 DSM 預設網站的根目錄，
 # 放在 web/japanese/ 就會出現在 http://<nas>/japanese/，不需要任何 Web Station 設定。
-if [ -d "/Volumes/web" ]; then
+if [ -d "$(dirname "$WEB_ROOT")" ]; then
   echo "→ 部署到 NAS 網站…"
   mkdir -p "$WEB_ROOT"
   rsync -a --delete \
@@ -56,10 +62,10 @@ for dirpath, _, names in os.walk(root):
             n += 1
 print(f'   已為 {n} 個檔案標記版本 {ver}')
 PYEOF
-  echo "   網站已更新：http://10.0.0.57/japanese/"
+  echo "   網站已更新：$NAS_SITE_URL"
 else
   echo "→ 略過網站部署（web 共享資料夾未掛載）"
-  echo "   要部署的話，先在 Finder 開 smb://10.0.0.57/web 再跑一次。"
+  echo "   要部署的話，先在 Finder 掛載 NAS 的 web 共享資料夾再跑一次。"
 fi
 
 echo "同步完成。NAS 上已是最新版。"

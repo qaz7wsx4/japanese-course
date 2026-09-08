@@ -1,0 +1,4 @@
+# 複製成 nas.conf 後填入自己的路徑（nas.conf 不會進版控）
+NAS_SHARE="/Volumes/你的共享資料夾/Share"
+NAS_WEB_ROOT="/Volumes/web/japanese"
+NAS_SITE_URL="http://你的NAS位址/japanese/"
