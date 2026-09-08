@@ -46,6 +46,18 @@ Mac 內建 python3，不需要安裝任何東西。**在蘭嶼沒有網路也照
 > `.git/config`，`receive.denyCurrentBranch` 設了也沒用，推不進有 checkout 的 repo。
 > 改用 bare repo 收 push 就完全避開這個問題。
 
+## 在外面使用（NAS + Tailscale）
+
+網站放在 NAS 的 Web Station，靠 Tailscale 這個私人網路從外面連回來。
+**NAS 不開任何對外連接埠**，監視器錄影與備份不會暴露。
+
+- NAS：Synology DSM 7.x（10.0.0.57），已裝 Container Manager
+- 網站根目錄直接指向 NAS 上的鏡像資料夾 `/公共空間/Share/japanese-reader`，
+  所以跑一次 `./sync-to-nas.sh` 就等於更新了網站，不需要第二套部署流程。
+
+> QuickConnect 做不到這件事。它只中繼 DSM 本身與有註冊的 Synology 套件，
+> 不會把 Web Station 的自訂網站對外開放（2026-09 查證）。
+
 ## 程式結構
 
     index.html          入口
@@ -72,3 +84,7 @@ Mac 內建 python3，不需要安裝任何東西。**在蘭嶼沒有網路也照
 - **字典放本地而非 CDN**：kuromoji 內部用 `path.join` 組字典網址，會把 `https://` 壓成 `https:/` 而載入失敗。放本地一併解決離線需求。
 - **`.tok` 用 `display: inline` 而非 `inline-block`**：inline-block 會把 ruby 高度算進盒子，底線被推離文字、助詞底色變成整塊高矩形。
 - **動詞併回助動詞**：kuromoji 把「行きました」切成 行き＋まし＋た，對初學者太破碎，且點詞時該顯示的是整個詞對應的原形「行く」。
+- **`vendor/kuromoji/kuromoji.js` 有一處本地修改**：原始碼一律把字典檔當 gzip 解壓，
+  但有些伺服器（例如設了 `gzip_static` 的 nginx）會自動解壓後才送出，再解一次就會失敗。
+  已改成先檢查 gzip magic bytes（`1f 8b`）再決定要不要解壓，兩種情況都能運作。
+  **若日後重新下載 kuromoji，這個修改會不見，要重新套用。**

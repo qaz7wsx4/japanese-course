@@ -8124,9 +8124,16 @@ BrowserDictionaryLoader.prototype.loadArrayBuffer = function (url, callback) {
         }
         var arraybuffer = this.response;
 
-        var gz = new zlib.Zlib.Gunzip(new Uint8Array(arraybuffer));
-        var typed_array = gz.decompress();
-        callback(null, typed_array.buffer);
+        // 本地修改（非 kuromoji 原始碼）：有些伺服器（例如設了 gzip_static 的 nginx）
+        // 會自動把 .gz 解壓後才送出，此時再解壓一次會炸掉。
+        // 先檢查 gzip magic bytes（1f 8b）決定要不要解壓，兩種情況都能運作。
+        var bytes = new Uint8Array(arraybuffer);
+        if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+            var gz = new zlib.Zlib.Gunzip(bytes);
+            callback(null, gz.decompress().buffer);
+        } else {
+            callback(null, arraybuffer);
+        }
     };
     xhr.onerror = function (err) {
         callback(err, null);
