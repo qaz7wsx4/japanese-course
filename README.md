@@ -1,5 +1,7 @@
 # 日文自學 App
 
+**線上版：https://qaz7wsx4.github.io/japanese-course/**
+
 從五十音之後接手、帶你走到 N5 的自學課程。課程內容烤在 App 裡，**完全離線運作**——
 不需要網路、不需要 API 金鑰、不需要註冊。
 
@@ -67,7 +69,13 @@
 
 純靜態網站，丟到任何靜態託管都能跑。路徑全部是相對路徑，放在子目錄底下也沒問題。
 
-**GitHub Pages**：把 repo 推上去，在 Settings → Pages 選分支即可。
+**GitHub Pages**（主要）：推到 `main` 就會自動部署，1～2 分鐘後上線。
+
+    git push github main
+
+GitHub 對靜態檔設 `max-age=600`，所以更新後最多 10 分鐘內所有裝置都會拿到新版。
+實測 GitHub Pages 會原樣送出 `.dat.gz`（`Content-Type: application/gzip`，無 `Content-Encoding`），
+kuromoji 自行解壓，字典正常載入。
 
 **自家 NAS**（選用）：`cp nas.conf.example nas.conf`，填入你的路徑後跑 `./sync-to-nas.sh`。
 它會推 git 歷史到 NAS 的 bare repo、鏡像檔案、並部署到網站目錄。
