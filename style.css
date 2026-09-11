@@ -395,3 +395,16 @@ button.wide { width: 100%; margin-top: 14px; }
 .result-pct { font-size: 52px; font-weight: 700; text-align: center; margin-top: 20px; }
 .result-detail { text-align: center; color: var(--muted); font-size: 14px; }
 .result-msg { text-align: center; font-size: 15px; margin: 20px 0 24px; line-height: 1.7; }
+
+/* ── 複習卡（首頁）── */
+.review-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.review-card.has-due { border-color: var(--accent); }
+.review-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.review-sub { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.review-card .wide { margin-top: 12px; }

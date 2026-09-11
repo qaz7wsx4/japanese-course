@@ -1,8 +1,9 @@
 import { loadTokenizer, analyze } from './tokenizer.js?v=DEV';
 import { renderLines } from './render.js?v=DEV';
 import { loadCurriculum, getLessons, getLesson, wordForm } from './curriculum.js?v=DEV';
-import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE } from './progress.js?v=DEV';
-import { buildQuiz } from './practice.js?v=DEV';
+import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
+         enrollVocab, getDueVocabIds, getReviewSummary } from './progress.js?v=DEV';
+import { buildQuiz, buildReview } from './practice.js?v=DEV';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -46,6 +47,8 @@ function renderHome() {
 
   const summary = node('p', 'summary', `已完成 ${doneCount} / ${lessons.length} 課`);
   el.view.appendChild(summary);
+
+  renderReviewCard(lessons);
 
   for (const lesson of lessons) {
     const state = getLessonState(lesson.id);
@@ -128,17 +131,45 @@ function renderGrammar(box, lesson) {
   box.appendChild(next);
 }
 
-// ── 練習 ──────────────────────────────────────────────────
-function startQuiz(lesson) {
-  const questions = buildQuiz(lesson, tokenizer);
+// ── 複習卡（首頁）────────────────────────────────────────
+function renderReviewCard(lessons) {
+  const sum = getReviewSummary();
+  if (sum.enrolled === 0) return;            // 一課都沒過，還沒有東西可以複習
+
+  const card = node('div', 'review-card' + (sum.due ? ' has-due' : ''));
+  if (sum.due > 0) {
+    card.appendChild(node('div', 'review-title', `今天有 ${sum.due} 個單字要複習`));
+    card.appendChild(node('div', 'review-sub',
+      `已納入 ${sum.enrolled} 個單字，其中 ${sum.mastered} 個已經很熟`));
+    const btn = node('button', 'primary wide', '開始複習');
+    btn.addEventListener('click', () => startReview(lessons));
+    card.appendChild(btn);
+  } else {
+    card.appendChild(node('div', 'review-title', '今天的複習做完了'));
+    card.appendChild(node('div', 'review-sub',
+      sum.nextDue ? `下一批 ${sum.nextDue.slice(5).replace('-', '/')} 回來。已納入 ${sum.enrolled} 個單字，${sum.mastered} 個已經很熟。`
+                  : `已納入 ${sum.enrolled} 個單字`));
+  }
+  el.view.appendChild(card);
+}
+
+// ── 練習與複習共用的答題流程 ──────────────────────────────
+/**
+ * @param {object} opts
+ * @param {string} opts.title 頂欄標題
+ * @param {Array} opts.questions
+ * @param {Function} opts.onBack 中途按返回要去哪
+ * @param {Function} opts.onFinish (correctCount, total) → 負責畫結果頁
+ */
+function runQuiz({ title, questions, onBack, onFinish }) {
   let index = 0;
   let correctCount = 0;
 
   function showQuestion() {
-    if (index >= questions.length) return showResult();
+    if (index >= questions.length) return onFinish(correctCount, questions.length);
 
     const q = questions[index];
-    setView(`第 ${lesson.id} 課 · 練習`, () => renderLesson(lesson.id, 'grammar'));
+    setView(title, onBack);
 
     const bar = node('div', 'quiz-bar');
     const fill = node('div', 'quiz-bar-fill');
@@ -157,40 +188,81 @@ function startQuiz(lesson) {
 
   function onAnswered(ok, q) {
     if (ok) correctCount++;
-    recordAnswer(q.vocabId, ok);
+    recordAnswer(q.vocabId, ok);             // 同時更新複習排程
     const next = node('button', 'primary wide', index + 1 >= questions.length ? '看結果' : '下一題');
     next.addEventListener('click', () => { index++; showQuestion(); });
     el.view.appendChild(next);
     next.scrollIntoView({ block: 'nearest' });
   }
 
-  function showResult() {
-    const pct = Math.round((correctCount / questions.length) * 100);
-    recordAttempt(lesson.id, pct);
-    setView(`第 ${lesson.id} 課 · 完成`, renderHome);
-
-    el.view.appendChild(node('div', 'result-pct', `${pct}%`));
-    el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${questions.length} 題`));
-    const passed = pct >= PASS_SCORE;
-    el.view.appendChild(node('p', 'result-msg',
-      pct === 100 ? '全對。下一課已經解鎖了。'
-        : passed ? '通過了，下一課已經解鎖。再練一次可以更穩。'
-        : `還沒到 ${PASS_SCORE}% 的及格線。回去看一次文法，再練一次就好。`));
-
-    const again = node('button', (passed ? 'ghost' : 'primary') + ' wide', '再練一次');
-    again.addEventListener('click', () => renderLesson(lesson.id, 'quiz'));
-    el.view.appendChild(again);
-
-    const review = node('button', 'ghost wide', '回去看文法');
-    review.addEventListener('click', () => renderLesson(lesson.id, 'grammar'));
-    el.view.appendChild(review);
-
-    const home = node('button', 'ghost wide', '回課程列表');
-    home.addEventListener('click', renderHome);
-    el.view.appendChild(home);
-  }
-
   showQuestion();
+}
+
+// ── 課程練習 ──────────────────────────────────────────────
+function startQuiz(lesson) {
+  runQuiz({
+    title: `第 ${lesson.id} 課 · 練習`,
+    questions: buildQuiz(lesson, tokenizer),
+    onBack: () => renderLesson(lesson.id, 'grammar'),
+    onFinish(correctCount, total) {
+      const pct = Math.round((correctCount / total) * 100);
+      recordAttempt(lesson.id, pct);
+      const passed = pct >= PASS_SCORE;
+      if (passed) enrollVocab(lesson.vocab.map((v) => v.id));   // 這課的字從明天開始進複習
+
+      setView(`第 ${lesson.id} 課 · 完成`, renderHome);
+      el.view.appendChild(node('div', 'result-pct', `${pct}%`));
+      el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
+      el.view.appendChild(node('p', 'result-msg',
+        pct === 100 ? '全對。下一課已經解鎖，這課的單字明天會進複習。'
+          : passed ? '通過了，下一課已經解鎖，這課的單字明天會進複習。'
+          : `還沒到 ${PASS_SCORE}% 的及格線。回去看一次文法，再練一次就好。`));
+
+      const again = node('button', (passed ? 'ghost' : 'primary') + ' wide', '再練一次');
+      again.addEventListener('click', () => renderLesson(lesson.id, 'quiz'));
+      el.view.appendChild(again);
+
+      const review = node('button', 'ghost wide', '回去看文法');
+      review.addEventListener('click', () => renderLesson(lesson.id, 'grammar'));
+      el.view.appendChild(review);
+
+      const home = node('button', 'ghost wide', '回課程列表');
+      home.addEventListener('click', renderHome);
+      el.view.appendChild(home);
+    },
+  });
+}
+
+// ── 複習 ──────────────────────────────────────────────────
+function startReview(lessons) {
+  const passed = lessons.filter((l) => getLessonState(l.id).done);
+  const questions = buildReview(getDueVocabIds(), passed, tokenizer);
+  if (!questions.length) return renderHome();
+
+  runQuiz({
+    title: '複習',
+    questions,
+    onBack: renderHome,
+    onFinish(correctCount, total) {
+      const pct = Math.round((correctCount / total) * 100);
+      const left = getReviewSummary().due;
+      setView('複習 · 完成', renderHome);
+      el.view.appendChild(node('div', 'result-pct', `${pct}%`));
+      el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
+      el.view.appendChild(node('p', 'result-msg',
+        left > 0 ? `答錯的 ${left} 個字會今天再回來一次。答對的字下次出現的間隔會拉長。`
+                 : '今天的複習做完了。答對的字下次出現的間隔會拉長，答錯的會很快再回來。'));
+
+      if (left > 0) {
+        const again = node('button', 'primary wide', `再複習答錯的 ${left} 個`);
+        again.addEventListener('click', () => startReview(lessons));
+        el.view.appendChild(again);
+      }
+      const home = node('button', (left > 0 ? 'ghost' : 'primary') + ' wide', '回課程列表');
+      home.addEventListener('click', renderHome);
+      el.view.appendChild(home);
+    },
+  });
 }
 
 function renderChoices(q, done) {

@@ -9,9 +9,10 @@ export const PASS_SCORE = 70;
 
 function read() {
   try {
-    return JSON.parse(localStorage.getItem(KEY)) || { lessons: {}, vocab: {} };
+    const s = JSON.parse(localStorage.getItem(KEY)) || {};
+    return { lessons: {}, vocab: {}, srs: {}, ...s };
   } catch {
-    return { lessons: {}, vocab: {} };
+    return { lessons: {}, vocab: {}, srs: {} };
   }
 }
 
@@ -45,7 +46,64 @@ export function recordAnswer(vocabId, correct) {
   v.seen += 1;
   if (correct) v.correct += 1;
   s.vocab[vocabId] = v;
+  s.srs[vocabId] = schedule(s.srs[vocabId], correct);
   write(s);
+}
+
+// ── 間隔複習 ──────────────────────────────────────────────
+// 每個單字放在 0～5 其中一格，答對往上一格、答錯掉回第 0 格。
+// 格子越高，下次出現的間隔越長。這是 Leitner 盒的作法，比完整的 SM-2 簡單，
+// 但對幾百個單字的規模已經夠用，而且行為好預測、好解釋。
+const INTERVALS_DAYS = [0, 1, 3, 7, 14, 30];
+
+/** 本地日期 YYYY-MM-DD。不用 toISOString，那是 UTC，台灣晚上會跳到隔天。 */
+function localDate(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return localDate(d);
+}
+
+function schedule(entry, correct) {
+  const box = correct ? Math.min((entry?.box ?? 0) + 1, INTERVALS_DAYS.length - 1) : 0;
+  return { box, due: addDays(localDate(), INTERVALS_DAYS[box]) };
+}
+
+/** 通過一課時，把該課所有單字納入複習（練習裡沒抽到的也要進來），明天開始 */
+export function enrollVocab(vocabIds) {
+  const s = read();
+  for (const id of vocabIds) {
+    if (!s.srs[id]) s.srs[id] = { box: 1, due: addDays(localDate(), 1) };
+  }
+  write(s);
+}
+
+/** 今天（含逾期）要複習的單字 id */
+export function getDueVocabIds() {
+  const s = read();
+  const today = localDate();
+  return Object.entries(s.srs)
+    .filter(([, e]) => e.due <= today)
+    .sort((a, b) => a[1].box - b[1].box)    // 越不熟的排前面
+    .map(([id]) => id);
+}
+
+/** 複習總覽：已納入幾個、今天幾個、下一次是哪天 */
+export function getReviewSummary() {
+  const s = read();
+  const today = localDate();
+  const entries = Object.values(s.srs);
+  const future = entries.map((e) => e.due).filter((d) => d > today).sort();
+  return {
+    enrolled: entries.length,
+    due: entries.filter((e) => e.due <= today).length,
+    nextDue: future[0] || null,
+    mastered: entries.filter((e) => e.box >= 4).length,   // 14 天以上才回來的算熟了
+  };
 }
 
 /** 這一課是否已解鎖：第 1 課永遠開著，其餘要前一課完成 */

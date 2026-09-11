@@ -3,7 +3,7 @@
 // 所以課程只要寫例句，題目會自己長出來，不需要手寫題庫。
 
 import { analyze } from './tokenizer.js?v=DEV';
-import { vocabUpTo, wordForm } from './curriculum.js?v=DEV';
+import { vocabUpTo, wordForm, getVocab } from './curriculum.js?v=DEV';
 
 const CORE_PARTICLES = ['は', 'が', 'を', 'に', 'で', 'へ', 'と', 'の'];
 
@@ -39,6 +39,32 @@ export function buildQuiz(lesson, tokenizer) {
   ].filter(Boolean);
 
   return shuffle(questions);
+}
+
+/**
+ * 產生一份複習。
+ * @param {string[]} dueIds 今天要複習的單字 id（已依不熟程度排序）
+ * @param {object[]} passedLessons 已通過的課，用來抽句型題與干擾選項
+ */
+export function buildReview(dueIds, passedLessons, tokenizer) {
+  const MAX_WORDS = 20;                       // 一次不要太多，寧可明天再來
+  const words = dueIds.slice(0, MAX_WORDS).map(getVocab).filter(Boolean);
+  if (!words.length) return [];
+
+  const maxLesson = Math.max(...passedLessons.map((l) => l.id), 1);
+  const pool = vocabUpTo(maxLesson);
+
+  // 同一個字兩種方向輪流問，避免只會「看得懂」不會「想得起來」
+  const wordQs = words.map((v, i) => (i % 2 === 0 ? jp2zh(v, pool, true) : zh2jp(v, pool)));
+
+  // 穿插幾題句型，讓文法也一起回來
+  const sentenceQs = [];
+  for (const L of shuffle(passedLessons)) {
+    if (sentenceQs.length >= 3) break;
+    sentenceQs.push(...particleQuestions(L, tokenizer, 1), ...orderQuestions(L, tokenizer, 1));
+  }
+
+  return shuffle([...wordQs, ...sentenceQs.slice(0, 3)].filter(Boolean));
 }
 
 // ── 單字題 ──────────────────────────────────────────────
