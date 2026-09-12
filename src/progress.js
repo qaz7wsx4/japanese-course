@@ -73,11 +73,14 @@ function schedule(entry, correct) {
   return { box, due: addDays(localDate(), INTERVALS_DAYS[box]) };
 }
 
-/** 通過一課時，把該課所有單字納入複習（練習裡沒抽到的也要進來），明天開始 */
-export function enrollVocab(vocabIds) {
+/**
+ * 把單字納入複習（已在排程裡的不動）。
+ * 剛通過一課時 daysUntilDue=1，明天開始；補登舊進度時用 0，今天就出現。
+ */
+export function enrollVocab(vocabIds, daysUntilDue = 1) {
   const s = read();
   for (const id of vocabIds) {
-    if (!s.srs[id]) s.srs[id] = { box: 1, due: addDays(localDate(), 1) };
+    if (!s.srs[id]) s.srs[id] = { box: 1, due: addDays(localDate(), daysUntilDue) };
   }
   write(s);
 }

@@ -131,6 +131,17 @@ function renderGrammar(box, lesson) {
   box.appendChild(next);
 }
 
+/**
+ * 補登：在複習功能上線前就通過的課，單字沒進排程。
+ * 每次啟動都跑一次，已在排程裡的不會被動到，所以是安全的。
+ * 補登的字今天就到期——它們早就該被複習了。
+ */
+function backfillReview() {
+  for (const l of getLessons()) {
+    if (getLessonState(l.id).done) enrollVocab(l.vocab.map((v) => v.id), 0);
+  }
+}
+
 // ── 複習卡（首頁）────────────────────────────────────────
 function renderReviewCard(lessons) {
   const sum = getReviewSummary();
@@ -343,6 +354,7 @@ Promise.all([
     tokenizer = tk;
     el.loading.hidden = true;
     el.kanaWrap.hidden = false;
+    backfillReview();
     renderHome();
   })
   .catch((err) => {
