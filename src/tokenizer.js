@@ -26,6 +26,20 @@ const FILE_SIZES = {
 
 export const DICT_TOTAL_BYTES = Object.values(FILE_SIZES).reduce((a, b) => a + b, 0);
 
+// 課程單字表。kuromoji 的字典不認得的複合詞（台湾人、勉強します）會被切碎，
+// 但對學習者來說那就是一個單字。登記之後，analyze 會把切碎的片段併回一個詞，
+// 並直接採用課程寫的讀音，保證跟單字表一致。
+const KNOWN_WORDS = new Map();   // 漢字寫法 → 假名讀音
+let KNOWN_MAX_LEN = 0;
+
+export function registerWords(list) {
+  for (const { kanji, kana } of list) {
+    if (!kanji) continue;
+    KNOWN_WORDS.set(kanji, kana);
+    KNOWN_MAX_LEN = Math.max(KNOWN_MAX_LEN, kanji.length);
+  }
+}
+
 /**
  * 載入字典並建立 tokenizer。
  * kuromoji 沒有提供進度回呼，所以在載入期間暫時包住 XMLHttpRequest
@@ -89,7 +103,7 @@ export function loadTokenizer(onProgress) {
  */
 export function analyze(tokenizer, text) {
   return text.split(/\r?\n/).map((line) =>
-    line.trim() ? merge(tokenizer.tokenize(line).map(normalize)) : []
+    line.trim() ? mergeKnown(merge(tokenizer.tokenize(line).map(normalize))) : []
   );
 }
 
@@ -109,6 +123,36 @@ function merge(tokens) {
     } else {
       out.push({ ...t, parts: [t] });
     }
+  }
+  return out;
+}
+
+// 把連續幾個片段拼起來剛好等於課程單字的，併成一個詞。最長優先。
+function mergeKnown(tokens) {
+  if (!KNOWN_WORDS.size) return tokens;
+  const out = [];
+  let i = 0;
+  while (i < tokens.length) {
+    let matched = null;
+    // 從最多片段開始試，找最長的符合
+    for (let j = Math.min(tokens.length, i + KNOWN_MAX_LEN); j > i + 1; j--) {
+      const surface = tokens.slice(i, j).map((t) => t.surface).join('');
+      if (KNOWN_WORDS.has(surface)) { matched = { j, surface }; break; }
+    }
+    if (!matched) { out.push(tokens[i]); i++; continue; }
+
+    const parts = tokens.slice(i, matched.j);
+    const kana = KNOWN_WORDS.get(matched.surface);
+    const last = parts[parts.length - 1];
+    out.push({
+      ...last,                              // 詞性取最後一個片段（日文的核心在後面）
+      surface: matched.surface,
+      reading: kana,
+      basic: matched.surface,
+      ruby: toRuby(matched.surface, kana),  // 用課程的讀音重算，不信 kuromoji 的
+      parts: parts.flatMap((t) => t.parts || [t]),
+    });
+    i = matched.j;
   }
   return out;
 }

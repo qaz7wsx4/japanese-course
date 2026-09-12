@@ -17,7 +17,7 @@ export function renderLines(container, lines) {
   });
 }
 
-function renderToken(tok, id) {
+export function renderToken(tok, id = '') {
   const span = document.createElement('span');
   span.className = `tok pos-${tok.pos}`;
   span.dataset.id = id;              // P2 的詞卡會用這個對應回 token

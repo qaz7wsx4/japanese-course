@@ -1,5 +1,5 @@
-import { loadTokenizer, analyze } from './tokenizer.js?v=DEV';
-import { renderLines } from './render.js?v=DEV';
+import { loadTokenizer, analyze, registerWords } from './tokenizer.js?v=DEV';
+import { renderLines, renderToken } from './render.js?v=DEV';
 import { loadCurriculum, getLessons, getLesson, wordForm } from './curriculum.js?v=DEV';
 import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
          enrollVocab, getDueVocabIds, getReviewSummary } from './progress.js?v=DEV';
@@ -305,23 +305,31 @@ function renderOrder(q, done) {
   const pool = node('div', 'choices order-pool');
   const chosen = [];
 
+  // 詞塊用句子裡斷好的 token 直接畫，不能拿字串重新斷詞——
+  // 「人」單獨斷會變 ひと，但在 台湾人 裡是 じん。
+  const chip = (tok, cls = '') => {
+    const box = node('div', 'jp ' + cls);
+    box.appendChild(renderToken(tok));
+    return box;
+  };
+
   const refresh = () => {
     built.replaceChildren();
     if (!chosen.length) built.appendChild(node('span', 'order-hint', '點下面的詞，依序排出句子'));
-    else chosen.forEach((c) => built.appendChild(jp(c.text, 'order-chip')));
+    else chosen.forEach((c) => built.appendChild(chip(c.tok, 'order-chip')));
   };
 
-  q.choices.forEach((text) => {
+  q.choices.forEach((tok) => {
     const b = node('button', 'choice chip');
-    b.appendChild(jp(text));
+    b.appendChild(chip(tok));
     b.addEventListener('click', () => {
       if (b.disabled) return;
       b.disabled = true;
       b.classList.add('used');
-      chosen.push({ text, btn: b });
+      chosen.push({ tok, btn: b });
       refresh();
       if (chosen.length === q.choices.length) {
-        const ok = chosen.map((c) => c.text).join('') === q.solution.join('');
+        const ok = chosen.map((c) => c.tok.surface).join('') === q.solution.join('');
         built.classList.add(ok ? 'correct' : 'wrong');
         if (!ok) {
           const ans = node('div', 'order-answer');
@@ -352,6 +360,8 @@ Promise.all([
 ])
   .then(([tk]) => {
     tokenizer = tk;
+    // 讓斷詞認得課程單字：台湾人、勉強します 這類 kuromoji 會切碎的詞才能保持完整
+    registerWords(getLessons().flatMap((l) => l.vocab));
     el.loading.hidden = true;
     el.kanaWrap.hidden = false;
     backfillReview();

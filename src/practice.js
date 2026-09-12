@@ -148,7 +148,9 @@ function orderQuestions(lesson, tokenizer, want) {
       type: 'order',
       title: '把句子排成正確的順序',
       zh: ex.zh,
-      choices: order.map((i) => correct[i]),
+      // 帶整個 token 而不只是字串：詞塊要用「在句子裡」的讀音來畫，
+      // 單獨拿「人」去重新斷詞會變成 ひと，但在 台湾人 裡是 じん。
+      choices: order.map((i) => toks[i]),
       solution: correct,             // 正確順序，作答時比對組出來的句子
       vocabId: null,
     });
