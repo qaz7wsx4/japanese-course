@@ -39,14 +39,19 @@ export function recordAttempt(id, scorePct) {
   write(s);
 }
 
-export function recordAnswer(vocabId, correct) {
+/**
+ * 記錄一次作答。
+ * @param {boolean} affectSchedule 自由練習傳 false：只記統計，不動複習排程，
+ *   否則多練幾次就能把間隔灌到 30 天，排程就失去意義了。
+ */
+export function recordAnswer(vocabId, correct, affectSchedule = true) {
   if (!vocabId) return;
   const s = read();
   const v = s.vocab[vocabId] || { seen: 0, correct: 0 };
   v.seen += 1;
   if (correct) v.correct += 1;
   s.vocab[vocabId] = v;
-  s.srs[vocabId] = schedule(s.srs[vocabId], correct);
+  if (affectSchedule) s.srs[vocabId] = schedule(s.srs[vocabId], correct);
   write(s);
 }
 
@@ -93,6 +98,15 @@ export function getDueVocabIds() {
     .filter(([, e]) => e.due <= today)
     .sort((a, b) => a[1].box - b[1].box)    // 越不熟的排前面
     .map(([id]) => id);
+}
+
+/** 所有已納入複習的單字 id，越不熟的排前面（同格子內隨機） */
+export function getEnrolledVocabIds() {
+  const s = read();
+  return Object.entries(s.srs)
+    .map(([id, e]) => ({ id, box: e.box, r: Math.random() }))
+    .sort((a, b) => a.box - b.box || a.r - b.r)
+    .map((x) => x.id);
 }
 
 /** 複習總覽：已納入幾個、今天幾個、下一次是哪天 */

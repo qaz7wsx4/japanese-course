@@ -2,7 +2,7 @@ import { loadTokenizer, analyze, registerWords } from './tokenizer.js?v=DEV';
 import { renderLines, renderToken } from './render.js?v=DEV';
 import { loadCurriculum, getLessons, getLesson, wordForm } from './curriculum.js?v=DEV';
 import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
-         enrollVocab, getDueVocabIds, getReviewSummary } from './progress.js?v=DEV';
+         enrollVocab, getDueVocabIds, getEnrolledVocabIds, getReviewSummary } from './progress.js?v=DEV';
 import { buildQuiz, buildReview } from './practice.js?v=DEV';
 
 const $ = (id) => document.getElementById(id);
@@ -161,6 +161,10 @@ function renderReviewCard(lessons) {
       sum.nextDue ? `下一批 ${sum.nextDue.slice(5).replace('-', '/')} 回來。已納入 ${sum.enrolled} 個單字，${sum.mastered} 個已經很熟。`
                   : `已納入 ${sum.enrolled} 個單字`));
   }
+  // 自由練習隨時可用：從所有學過的字出題，不影響排程，想練幾次都行
+  const free = node('button', (sum.due ? 'ghost' : 'primary') + ' wide', '自由練習');
+  free.addEventListener('click', () => startFreePractice(lessons));
+  card.appendChild(free);
   el.view.appendChild(card);
 }
 
@@ -171,8 +175,9 @@ function renderReviewCard(lessons) {
  * @param {Array} opts.questions
  * @param {Function} opts.onBack 中途按返回要去哪
  * @param {Function} opts.onFinish (correctCount, total) → 負責畫結果頁
+ * @param {boolean} [opts.affectSchedule=true] 自由練習傳 false
  */
-function runQuiz({ title, questions, onBack, onFinish }) {
+function runQuiz({ title, questions, onBack, onFinish, affectSchedule = true }) {
   let index = 0;
   let correctCount = 0;
 
@@ -199,7 +204,7 @@ function runQuiz({ title, questions, onBack, onFinish }) {
 
   function onAnswered(ok, q) {
     if (ok) correctCount++;
-    recordAnswer(q.vocabId, ok);             // 同時更新複習排程
+    recordAnswer(q.vocabId, ok, affectSchedule);
     const next = node('button', 'primary wide', index + 1 >= questions.length ? '看結果' : '下一題');
     next.addEventListener('click', () => { index++; showQuestion(); });
     el.view.appendChild(next);
@@ -237,6 +242,34 @@ function startQuiz(lesson) {
       review.addEventListener('click', () => renderLesson(lesson.id, 'grammar'));
       el.view.appendChild(review);
 
+      const home = node('button', 'ghost wide', '回課程列表');
+      home.addEventListener('click', renderHome);
+      el.view.appendChild(home);
+    },
+  });
+}
+
+// ── 自由練習：不看到期日，不動排程 ──────────────────────
+function startFreePractice(lessons) {
+  const passed = lessons.filter((l) => getLessonState(l.id).done);
+  const questions = buildReview(getEnrolledVocabIds(), passed, tokenizer);
+  if (!questions.length) return renderHome();
+
+  runQuiz({
+    title: '自由練習',
+    questions,
+    affectSchedule: false,
+    onBack: renderHome,
+    onFinish(correctCount, total) {
+      const pct = Math.round((correctCount / total) * 100);
+      setView('自由練習 · 完成', renderHome);
+      el.view.appendChild(node('div', 'result-pct', `${pct}%`));
+      el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
+      el.view.appendChild(node('p', 'result-msg', '自由練習不影響複習排程，想練幾次都可以。'));
+
+      const again = node('button', 'primary wide', '再練一次');
+      again.addEventListener('click', () => startFreePractice(lessons));
+      el.view.appendChild(again);
       const home = node('button', 'ghost wide', '回課程列表');
       home.addEventListener('click', renderHome);
       el.view.appendChild(home);
