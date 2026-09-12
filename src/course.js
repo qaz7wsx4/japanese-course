@@ -23,6 +23,11 @@ function jp(text, cls = '') {
   return box;
 }
 
+/** 純日文文字：不斷詞、不標假名。單字題的題目與選項用這個，假名不能透露答案。 */
+function jpPlain(text, cls = '') {
+  return node('div', 'jp-plain ' + cls, text);
+}
+
 const node = (tag, cls, text) => {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -195,7 +200,8 @@ function runQuiz({ title, questions, onBack, onFinish, affectSchedule = true }) 
     el.view.appendChild(node('div', 'quiz-count', `${index + 1} / ${questions.length}`));
 
     el.view.appendChild(node('div', 'quiz-title' + (q.isReview ? ' review' : ''), q.title));
-    if (q.jp) el.view.appendChild(jp(q.jp, 'quiz-jp'));
+    if (q.jp) el.view.appendChild(jp(q.jp, 'quiz-jp'));                 // 句子：斷詞＋標假名
+    if (q.prompt) el.view.appendChild(jpPlain(q.prompt, 'quiz-prompt')); // 單字：不標假名
     if (q.zh) el.view.appendChild(node('div', 'quiz-zh', q.zh));
 
     if (q.type === 'order') renderOrder(q, onAnswered);
@@ -314,9 +320,9 @@ function renderChoices(q, done) {
   const buttons = [];
   q.choices.forEach((c, i) => {
     const b = node('button', 'choice');
-    // 日文選項要標假名，中文選項直接放文字
-    if (q.type === 'zh2jp' || q.type === 'particle') b.appendChild(jp(c));
-    else b.textContent = c;
+    if (q.choiceKind === 'kana' || q.choiceKind === 'kanji') b.appendChild(jpPlain(c));  // 單字：不標假名
+    else if (q.type === 'particle') b.appendChild(jp(c));                                // 助詞
+    else b.textContent = c;                                                              // 中文
     b.addEventListener('click', () => {
       if (buttons.some((x) => x.disabled)) return;
       const ok = i === q.answer;

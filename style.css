@@ -408,3 +408,13 @@ button.wide { width: 100%; margin-top: 14px; }
 .review-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .review-sub { font-size: 13px; color: var(--muted); line-height: 1.6; }
 .review-card .wide { margin-top: 12px; }
+
+/* 純日文文字（單字題用，不標假名） */
+.jp-plain {
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+               "Noto Sans JP", sans-serif;
+  font-size: 20px;
+  line-height: 1.6;
+}
+.quiz-prompt { font-size: 34px; font-weight: 500; margin: 6px 0 18px; }
+.choice .jp-plain { font-size: 19px; }

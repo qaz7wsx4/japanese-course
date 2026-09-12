@@ -29,13 +29,19 @@ export function buildQuiz(lesson, tokenizer) {
   const current = lesson.vocab;
   const earlier = pool.filter((v) => v.lesson < lesson.id);
 
+  const kanjiWords = current.filter((v) => v.kanji);
+
+  // 中文母語者看到漢字就知道意思，所以單字題的難度要放在「讀音」上：
+  // 給漢字不給假名、或只給假名不給漢字。N5 的漢字読み／表記就是這樣考的。
   const questions = [
-    ...sample(current, 5).map((v) => jp2zh(v, pool)),
-    ...sample(current, 4).map((v) => zh2jp(v, pool)),
+    ...sample(kanjiWords, 3).map((v) => readingQ(v, pool)),      // 漢字 → 選讀音
+    ...sample(current, 3).map((v) => zh2kanaQ(v, pool)),         // 中文 → 選假名
+    ...sample(current, 3).map((v) => kana2zhQ(v, pool)),         // 假名 → 選中文
+    ...sample(kanjiWords, 2).map((v) => kana2kanjiQ(v, pool)),   // 假名 → 選漢字
     ...particleQuestions(lesson, tokenizer, 3),
     ...orderQuestions(lesson, tokenizer, 2),
     // 穿插舊課單字，讓學過的東西持續回來
-    ...sample(earlier, Math.min(3, earlier.length)).map((v) => jp2zh(v, pool, true)),
+    ...sample(earlier, Math.min(2, earlier.length)).map((v) => reviewQ(v, pool)),
   ].filter(Boolean);
 
   return shuffle(questions);
@@ -54,8 +60,8 @@ export function buildReview(dueIds, passedLessons, tokenizer) {
   const maxLesson = Math.max(...passedLessons.map((l) => l.id), 1);
   const pool = vocabUpTo(maxLesson);
 
-  // 同一個字兩種方向輪流問，避免只會「看得懂」不會「想得起來」
-  const wordQs = words.map((v, i) => (i % 2 === 0 ? jp2zh(v, pool, true) : zh2jp(v, pool)));
+  // 幾種方向輪流問，避免只會「看得懂」不會「想得起來」
+  const wordQs = words.map((v, i) => reviewQ(v, pool, i));
 
   // 穿插幾題句型，讓文法也一起回來
   const sentenceQs = [];
@@ -68,34 +74,93 @@ export function buildReview(dueIds, passedLessons, tokenizer) {
 }
 
 // ── 單字題 ──────────────────────────────────────────────
-function jp2zh(v, pool, isReview = false) {
-  const distractors = sample(pool.filter((x) => x.id !== v.id && x.zh !== v.zh), 3);
-  if (distractors.length < 3) return null;
-  const choices = shuffle([v, ...distractors]);
-  return {
-    type: 'jp2zh',
-    title: isReview ? '複習：這個詞是什麼意思？' : '這個詞是什麼意思？',
-    jp: wordForm(v),
-    choices: choices.map((c) => c.zh),
-    answer: choices.findIndex((c) => c.id === v.id),
-    vocabId: v.id,
-    isReview,
-  };
+// 每題結構：
+//   promptKind: 'text' | 'kanji' | 'kana'   題目怎麼呈現（kanji/kana 都不標假名）
+//   choiceKind: 'text' | 'kana' | 'kanji'   選項怎麼呈現
+// 干擾選項盡量挑「像」的：假名長度相近、或共用同一個漢字，不然一眼就能刪掉。
+
+/** 從 pool 挑 n 個干擾項，依 score 越小越優先（相似度），同分隨機 */
+function distractors(v, pool, n, score) {
+  const cands = pool.filter((x) => x.id !== v.id && x.zh !== v.zh && x.kana !== v.kana);
+  return shuffle(cands)
+    .map((x) => ({ x, s: score(x) }))
+    .sort((a, b) => a.s - b.s)
+    .slice(0, n)
+    .map((o) => o.x);
 }
 
-function zh2jp(v, pool) {
-  const distractors = sample(pool.filter((x) => x.id !== v.id && x.zh !== v.zh), 3);
-  if (distractors.length < 3) return null;
-  const choices = shuffle([v, ...distractors]);
-  return {
-    type: 'zh2jp',
-    title: '「' + v.zh + '」的日文是哪一個？',
-    jp: null,
-    choicesJp: choices.map((c) => wordForm(c)),
-    choices: choices.map((c) => wordForm(c)),
-    answer: choices.findIndex((c) => c.id === v.id),
-    vocabId: v.id,
-  };
+const lenDiff = (v) => (x) => Math.abs(x.kana.length - v.kana.length);
+const sharesKanji = (v) => (x) => (x.kanji && [...x.kanji].some((c) => v.kanji.includes(c)) ? 0 : 1);
+
+function build(v, choicesArr, fields) {
+  const choices = shuffle(choicesArr);
+  return { ...fields, answer: choices.findIndex((c) => c.id === v.id), vocabId: v.id, _choices: choices };
+}
+
+/** 漢字 → 選讀音（N5 漢字読み） */
+function readingQ(v, pool, isReview = false) {
+  if (!v.kanji) return kana2zhQ(v, pool, isReview);
+  const ds = distractors(v, pool, 3, lenDiff(v));
+  if (ds.length < 3) return null;
+  const q = build(v, [v, ...ds], {
+    type: 'reading', isReview,
+    title: (isReview ? '複習：' : '') + '這個字怎麼唸？',
+    promptKind: 'kanji', prompt: v.kanji,
+    choiceKind: 'kana',
+  });
+  q.choices = q._choices.map((c) => c.kana);
+  return q;
+}
+
+/** 假名 → 選中文（拿掉漢字，逼你靠聲音認字） */
+function kana2zhQ(v, pool, isReview = false) {
+  const ds = distractors(v, pool, 3, () => 0);
+  if (ds.length < 3) return null;
+  const q = build(v, [v, ...ds], {
+    type: 'kana2zh', isReview,
+    title: (isReview ? '複習：' : '') + '這個詞是什麼意思？',
+    promptKind: 'kana', prompt: v.kana,
+    choiceKind: 'text',
+  });
+  q.choices = q._choices.map((c) => c.zh);
+  return q;
+}
+
+/** 中文 → 選假名（選項不給漢字，不能靠字形比對） */
+function zh2kanaQ(v, pool, isReview = false) {
+  const ds = distractors(v, pool, 3, lenDiff(v));
+  if (ds.length < 3) return null;
+  const q = build(v, [v, ...ds], {
+    type: 'zh2kana', isReview,
+    title: (isReview ? '複習：' : '') + '「' + v.zh + '」的日文怎麼唸？',
+    promptKind: 'text', prompt: null,
+    choiceKind: 'kana',
+  });
+  q.choices = q._choices.map((c) => c.kana);
+  return q;
+}
+
+/** 假名 → 選漢字（N5 表記），干擾項優先挑共用漢字的 */
+function kana2kanjiQ(v, pool, isReview = false) {
+  if (!v.kanji) return zh2kanaQ(v, pool, isReview);
+  const ds = distractors(v, pool.filter((x) => x.kanji), 3, sharesKanji(v));
+  if (ds.length < 3) return null;
+  const q = build(v, [v, ...ds], {
+    type: 'kana2kanji', isReview,
+    title: (isReview ? '複習：' : '') + '「' + v.kana + '」的漢字是哪一個？',
+    promptKind: 'text', prompt: null,
+    choiceKind: 'kanji',
+  });
+  q.choices = q._choices.map((c) => c.kanji);
+  return q;
+}
+
+/** 複習用：幾種方向輪著出 */
+function reviewQ(v, pool, i = Math.floor(Math.random() * 3)) {
+  const kind = i % 3;
+  if (kind === 0) return readingQ(v, pool, true);
+  if (kind === 1) return kana2zhQ(v, pool, true);
+  return zh2kanaQ(v, pool, true);
 }
 
 // ── 助詞填空（從例句自動生成）──────────────────────────
