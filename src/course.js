@@ -2,7 +2,9 @@ import { loadTokenizer, analyze, registerWords } from './tokenizer.js?v=DEV';
 import { renderLines, renderToken } from './render.js?v=DEV';
 import { loadCurriculum, getLessons, getLesson, wordForm } from './curriculum.js?v=DEV';
 import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
-         enrollVocab, getDueVocabIds, getEnrolledVocabIds, getReviewSummary } from './progress.js?v=DEV';
+         enrollVocab, getDueVocabIds, getEnrolledVocabIds, getReviewSummary,
+         getPlan, setPlan, clearPlan, countLessonsDone } from './progress.js?v=DEV';
+import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
 import { buildQuiz, buildReview } from './practice.js?v=DEV';
 
 const $ = (id) => document.getElementById(id);
@@ -53,6 +55,7 @@ function renderHome() {
   const summary = node('p', 'summary', `已完成 ${doneCount} / ${lessons.length} 課`);
   el.view.appendChild(summary);
 
+  renderPlanCard();
   renderReviewCard(lessons);
 
   for (const lesson of lessons) {
@@ -145,6 +148,86 @@ function backfillReview() {
   for (const l of getLessons()) {
     if (getLessonState(l.id).done) enrollVocab(l.vocab.map((v) => v.id), 0);
   }
+}
+
+// ── 進度卡（首頁）────────────────────────────────────────
+const fmtDate = (s) => { const [y, m, d] = s.split('-'); return `${y} 年 ${+m} 月 ${+d} 日`; };
+
+function renderPlanCard() {
+  const plan = getPlan();
+  const card = node('div', 'plan-card');
+
+  if (!plan) {
+    card.appendChild(node('div', 'plan-title', '設定考試目標'));
+    card.appendChild(node('div', 'plan-sub', 'JLPT 一年兩次，7 月和 12 月的第一個星期日。設定之後首頁會告訴你進度是超前還是落後。'));
+    const row = node('div', 'plan-presets');
+    for (const d of upcomingExamDates()) {
+      const b = node('button', 'ghost', fmtDate(d));
+      b.addEventListener('click', () => { setPlan(d, localDate()); renderHome(); });
+      row.appendChild(b);
+    }
+    card.appendChild(row);
+    const custom = node('label', 'plan-custom');
+    custom.append('或自訂日期：');
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.min = localDate();
+    input.addEventListener('change', () => { if (input.value) { setPlan(input.value, localDate()); renderHome(); } });
+    custom.appendChild(input);
+    card.appendChild(custom);
+    el.view.appendChild(card);
+    return;
+  }
+
+  const pace = computePace(plan, countLessonsDone());
+  const head = node('div', 'plan-head');
+  head.appendChild(node('div', 'plan-title', `目標 ${fmtDate(plan.examDate)}`));
+  const change = node('button', 'link', '更改');
+  change.addEventListener('click', () => { clearPlan(); renderHome(); });
+  head.appendChild(change);
+  card.appendChild(head);
+
+  if (pace.tooLate) {
+    card.appendChild(node('div', 'plan-sub', '考試日已過。按「更改」設定下一場。'));
+    el.view.appendChild(card);
+    return;
+  }
+
+  let status, cls;
+  if (pace.allDone)               { status = '課程全部完成'; cls = 'ahead'; }
+  else if (pace.deltaWeeks >= 1)  { status = `超前 ${pace.deltaWeeks} 週`; cls = 'ahead'; }
+  else if (pace.deltaWeeks <= -1) { status = `落後 ${-pace.deltaWeeks} 週`; cls = 'behind'; }
+  else                            { status = '進度正常'; cls = 'ontrack'; }
+
+  const line = node('div', 'plan-line');
+  line.appendChild(node('span', '', `還有 ${pace.weeksLeft} 週`));
+  line.appendChild(node('span', 'plan-dot', '·'));
+  line.appendChild(node('span', '', `完成 ${countLessonsDone()} / ${TOTAL_LESSONS} 課`));
+  line.appendChild(node('span', 'plan-dot', '·'));
+  line.appendChild(node('span', 'plan-status ' + cls, status));
+  card.appendChild(line);
+
+  if (pace.allDone) {
+    card.appendChild(node('div', 'plan-sub', `接下來是${pace.expectedPhase.name}：${pace.expectedPhase.note}。複習卡每天照做。`));
+  } else if (pace.expectedLesson && cls === 'behind') {
+    card.appendChild(node('div', 'plan-sub', `照計畫今天應該在第 ${pace.expectedLesson} 課。不用補進度，把複習卡做完、往下走就好。`));
+  } else if (cls === 'ahead') {
+    card.appendChild(node('div', 'plan-sub', '超前不用加快，把複習卡做穩比多走一課有用。'));
+  }
+
+  // 階段列表：現在在哪、接下來是什麼
+  const list = node('div', 'plan-phases');
+  for (const ph of PHASES) {
+    const isNow = ph.id === pace.currentPhase.id;
+    const row = node('div', 'plan-phase' + (isNow ? ' now' : ''));
+    const range = ph.lessons ? `第 ${ph.lessons[0]}～${ph.lessons[1]} 課` : '';
+    row.appendChild(node('span', 'plan-phase-name', `${ph.id}. ${ph.name}`));
+    row.appendChild(node('span', 'plan-phase-range', range));
+    if (isNow) row.appendChild(node('div', 'plan-phase-note', ph.note));
+    list.appendChild(row);
+  }
+  card.appendChild(list);
+  el.view.appendChild(card);
 }
 
 // ── 複習卡（首頁）────────────────────────────────────────

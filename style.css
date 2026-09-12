@@ -418,3 +418,38 @@ button.wide { width: 100%; margin-top: 14px; }
 }
 .quiz-prompt { font-size: 34px; font-weight: 500; margin: 6px 0 18px; }
 .choice .jp-plain { font-size: 19px; }
+
+/* ── 進度卡（首頁）── */
+.plan-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.plan-head { display: flex; align-items: center; justify-content: space-between; }
+.plan-title { font-size: 16px; font-weight: 600; }
+.plan-sub { font-size: 13px; color: var(--muted); line-height: 1.7; margin-top: 6px; }
+button.link {
+  min-height: 0; padding: 2px 6px; font-size: 13px;
+  background: transparent; border: none; color: var(--muted);
+}
+.plan-presets { display: flex; gap: 8px; margin-top: 12px; }
+.plan-presets .ghost { flex: 1; }
+.plan-custom { display: block; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.plan-custom input { margin-left: 6px; font-family: inherit; font-size: 14px; }
+.plan-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 14px; margin-top: 8px; }
+.plan-dot { color: var(--border); }
+.plan-status { font-weight: 600; }
+.plan-status.ahead   { color: var(--pos-adj); }
+.plan-status.behind  { color: var(--pos-verb); }
+.plan-status.ontrack { color: var(--accent); }
+.plan-phases { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.plan-phase {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  font-size: 13px; color: var(--muted); padding: 4px 0;
+}
+.plan-phase.now { color: var(--text); }
+.plan-phase.now .plan-phase-name { font-weight: 600; color: var(--accent); }
+.plan-phase-range { font-size: 12px; }
+.plan-phase-note { width: 100%; font-size: 12px; color: var(--muted); line-height: 1.6; }

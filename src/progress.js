@@ -10,9 +10,9 @@ export const PASS_SCORE = 70;
 function read() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { lessons: {}, vocab: {}, srs: {}, ...s };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, ...s };
   } catch {
-    return { lessons: {}, vocab: {}, srs: {} };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null };
   }
 }
 
@@ -127,6 +127,29 @@ export function getReviewSummary() {
 export function isUnlocked(lessonId) {
   if (lessonId === 1) return true;
   return getLessonState(lessonId - 1).done;
+}
+
+// ── 學習計畫（考試目標）──────────────────────────────────
+export function getPlan() {
+  return read().plan;
+}
+
+/** 設定考試日。startDate 記下設定那天，進度是從那天開始算的。 */
+export function setPlan(examDate, startDate) {
+  const s = read();
+  s.plan = { examDate, startDate };
+  write(s);
+}
+
+export function clearPlan() {
+  const s = read();
+  s.plan = null;
+  write(s);
+}
+
+/** 已完成的課數（課是依序解鎖的，所以數 done 的就好） */
+export function countLessonsDone() {
+  return Object.values(read().lessons).filter((l) => l.done).length;
 }
 
 export function resetAll() {
