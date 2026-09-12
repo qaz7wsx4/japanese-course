@@ -139,7 +139,19 @@ function mergeKnown(tokens) {
       const surface = tokens.slice(i, j).map((t) => t.surface).join('');
       if (KNOWN_WORDS.has(surface)) { matched = { j, surface }; break; }
     }
-    if (!matched) { out.push(tokens[i]); i++; continue; }
+    if (!matched) {
+      // 單一片段剛好是課程單字：讀音也以課程為準。
+      // 數字與時間的讀音變化多（四時＝よじ、中＝なか），kuromoji 常給錯。
+      const t = tokens[i];
+      const kana = KNOWN_WORDS.get(t.surface);
+      if (kana && kana !== t.reading) {
+        out.push({ ...t, reading: kana, ruby: toRuby(t.surface, kana) });
+      } else {
+        out.push(t);
+      }
+      i++;
+      continue;
+    }
 
     const parts = tokens.slice(i, matched.j);
     const kana = KNOWN_WORDS.get(matched.surface);

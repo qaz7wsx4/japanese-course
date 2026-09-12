@@ -166,7 +166,7 @@ function reviewQ(v, pool, i = Math.floor(Math.random() * 3)) {
 // ── 助詞填空（從例句自動生成）──────────────────────────
 function particleQuestions(lesson, tokenizer, want) {
   const out = [];
-  const examples = shuffle(lesson.grammar.flatMap((g) => g.examples));
+  const examples = shuffle(lesson.grammar.flatMap((g) => g.examples).filter((ex) => !ex.noQuiz));
 
   for (const ex of examples) {
     if (out.length >= want) break;
@@ -198,7 +198,7 @@ function particleQuestions(lesson, tokenizer, want) {
 // ── 排列組句（從例句自動生成）──────────────────────────
 function orderQuestions(lesson, tokenizer, want) {
   const out = [];
-  const examples = shuffle(lesson.grammar.flatMap((g) => g.examples));
+  const examples = shuffle(lesson.grammar.flatMap((g) => g.examples).filter((ex) => !ex.noQuiz));
 
   for (const ex of examples) {
     if (out.length >= want) break;

@@ -400,7 +400,8 @@ Promise.all([
   .then(([tk]) => {
     tokenizer = tk;
     // 讓斷詞認得課程單字：台湾人、勉強します 這類 kuromoji 會切碎的詞才能保持完整
-    registerWords(getLessons().flatMap((l) => l.vocab));
+    // 課程單字 + 課程指定的額外讀音（四時半 這類不是單字、但 kuromoji 切法對不上單字表的詞）
+    registerWords(getLessons().flatMap((l) => [...l.vocab, ...(l.readings || [])]));
     el.loading.hidden = true;
     el.kanaWrap.hidden = false;
     backfillReview();
