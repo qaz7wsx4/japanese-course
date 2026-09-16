@@ -10,9 +10,9 @@ export const PASS_SCORE = 70;
 function read() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { lessons: {}, vocab: {}, srs: {}, plan: null, ...s };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, ...s };
   } catch {
-    return { lessons: {}, vocab: {}, srs: {}, plan: null };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {} };
   }
 }
 
@@ -127,6 +127,18 @@ export function getReviewSummary() {
 export function isUnlocked(lessonId) {
   if (lessonId === 1) return true;
   return getLessonState(lessonId - 1).done;
+}
+
+// ── 假名基礎 ──────────────────────────────────────────────
+export function getKanaState(sectionId) {
+  return read().kana[sectionId] || { best: 0, attempts: 0 };
+}
+
+export function recordKanaAttempt(sectionId, scorePct) {
+  const s = read();
+  const prev = s.kana[sectionId] || { best: 0, attempts: 0 };
+  s.kana[sectionId] = { best: Math.max(prev.best, scorePct), attempts: prev.attempts + 1 };
+  write(s);
 }
 
 // ── 學習計畫（考試目標）──────────────────────────────────

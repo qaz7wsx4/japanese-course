@@ -3,7 +3,9 @@ import { renderLines, renderToken } from './render.js?v=DEV';
 import { loadCurriculum, getLessons, getLesson, wordForm } from './curriculum.js?v=DEV';
 import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
          enrollVocab, getDueVocabIds, getEnrolledVocabIds, getReviewSummary,
-         getPlan, setPlan, clearPlan, countLessonsDone } from './progress.js?v=DEV';
+         getPlan, setPlan, clearPlan, countLessonsDone,
+         getKanaState, recordKanaAttempt } from './progress.js?v=DEV';
+import { loadKana, getKanaSections, getKanaSection, buildKanaQuiz } from './kana.js?v=DEV';
 import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
 import { buildQuiz, buildReview } from './practice.js?v=DEV';
 
@@ -57,6 +59,7 @@ function renderHome() {
 
   renderPlanCard();
   renderReviewCard(lessons);
+  renderKanaCard();
 
   for (const lesson of lessons) {
     const state = getLessonState(lesson.id);
@@ -148,6 +151,81 @@ function backfillReview() {
   for (const l of getLessons()) {
     if (getLessonState(l.id).done) enrollVocab(l.vocab.map((v) => v.id), 0);
   }
+}
+
+// ── 假名基礎卡（首頁）────────────────────────────────────
+// 不擋課程進度：已經在上課的人隨時可以回來補濁音、拗音。
+function renderKanaCard() {
+  const card = node('div', 'kana-card');
+  card.appendChild(node('div', 'kana-card-title', '假名基礎'));
+  card.appendChild(node('div', 'kana-card-sub', '課程裡到處都是濁音和拗音（べんきょう、きょう、じゅう）。沒把握就先來這裡。'));
+  const row = node('div', 'kana-sections');
+  for (const sec of getKanaSections()) {
+    const st = getKanaState(sec.id);
+    const b = node('button', 'kana-section-btn' + (st.best >= 90 ? ' good' : ''));
+    b.appendChild(node('span', 'kana-section-name', sec.title));
+    b.appendChild(node('span', 'kana-section-meta', st.attempts ? `最佳 ${st.best}%` : sec.subtitle));
+    b.addEventListener('click', () => renderKanaSection(sec.id));
+    row.appendChild(b);
+  }
+  card.appendChild(row);
+  el.view.appendChild(card);
+}
+
+// ── 假名一節：表格 + 練習 ────────────────────────────────
+function renderKanaSection(id) {
+  const sec = getKanaSection(id);
+  setView(`假名 · ${sec.title}`, renderHome);
+
+  el.view.appendChild(node('p', 'goal', sec.intro));
+
+  const grid = node('div', 'kana-grid');
+  grid.style.gridTemplateColumns = `repeat(${sec.cols}, 1fr)`;
+  for (const r of sec.rows) {
+    const cell = node('div', 'kana-cell');
+    cell.appendChild(node('div', 'kana-h jp-plain', r.h));
+    cell.appendChild(node('div', 'kana-k jp-plain', r.k));
+    cell.appendChild(node('div', 'kana-r', r.r));
+    if (r.zh && !r.ex) cell.appendChild(node('div', 'kana-ex', r.zh));      // 促音長音：詞本身的意思
+    if (r.ex) cell.appendChild(node('div', 'kana-ex jp-plain', `${r.ex}`));  // 濁音拗音：課程裡的例詞
+    if (r.ex) cell.appendChild(node('div', 'kana-exzh', r.zh));
+    if (r.note) cell.appendChild(node('div', 'kana-exzh', r.note));
+    grid.appendChild(cell);
+  }
+  el.view.appendChild(grid);
+
+  const btn = node('button', 'primary wide', '練習這一節');
+  btn.addEventListener('click', () => startKanaQuiz(sec));
+  el.view.appendChild(btn);
+}
+
+function startKanaQuiz(sec) {
+  runQuiz({
+    title: `假名 · ${sec.title} · 練習`,
+    questions: buildKanaQuiz(sec, 12),
+    affectSchedule: false,
+    onBack: () => renderKanaSection(sec.id),
+    onFinish(correctCount, total) {
+      const pct = Math.round((correctCount / total) * 100);
+      recordKanaAttempt(sec.id, pct);
+      setView(`假名 · ${sec.title} · 完成`, renderHome);
+      el.view.appendChild(node('div', 'result-pct', `${pct}%`));
+      el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
+      el.view.appendChild(node('p', 'result-msg',
+        pct >= 90 ? '很穩了。可以往下一節，或回課程繼續。'
+          : pct >= 70 ? '大致可以，再練一兩次會更順。'
+          : '還不熟，回去看一次表格再練。假名是底，底穩了後面全部會輕鬆。'));
+      const again = node('button', 'primary wide', '再練一次');
+      again.addEventListener('click', () => startKanaQuiz(sec));
+      el.view.appendChild(again);
+      const table = node('button', 'ghost wide', '回去看表格');
+      table.addEventListener('click', () => renderKanaSection(sec.id));
+      el.view.appendChild(table);
+      const home = node('button', 'ghost wide', '回首頁');
+      home.addEventListener('click', renderHome);
+      el.view.appendChild(home);
+    },
+  });
 }
 
 // ── 進度卡（首頁）────────────────────────────────────────
@@ -479,6 +557,7 @@ Promise.all([
     el.loadingTitle.textContent = `正在載入日文字典… ${mb(loaded)} / ${mb(total)} MB`;
   }),
   loadCurriculum(),
+  loadKana(),
 ])
   .then(([tk]) => {
     tokenizer = tk;

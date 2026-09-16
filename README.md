@@ -5,6 +5,7 @@
 從五十音之後接手、帶你走到 N5 的自學課程。課程內容烤在 App 裡，**完全離線運作**——
 不需要網路、不需要 API 金鑰、不需要註冊。
 
+- **假名基礎**：清音、濁音・半濁音、拗音、促音・長音四節，表格＋練習。不擋課程進度，隨時可回來補。
 - **課程**（`index.html`）：一課一課學，每課 單字 → 文法 → 練習。練習達 70 分才解鎖下一課。
 - **自由閱讀**（`reader.html`）：貼上任何日文，自動斷詞、標假名（ふりがな）、詞性上色。
 
@@ -71,6 +72,8 @@
       course.js         課程主流程與畫面
       curriculum.js     課程資料載入
       practice.js       練習題產生器
+      kana.js           假名練習題產生器
+      plan.js           學習計畫與進度比對
       progress.js       進度與解鎖（localStorage）
       tokenizer.js      kuromoji 載入、斷詞、詞塊合併、讀音覆寫
       furigana.js       讀音對齊演算法
@@ -79,6 +82,7 @@
       reader.js         自由閱讀頁的流程
     curriculum/
       lessons.json      課程內容
+      kana.json         假名基礎（四節）
     vendor/kuromoji/    kuromoji + 詞典（17 MB，離線用）
     devserver.py        本機開發伺服器
     sync-to-nas.sh      同步到自家 NAS（選用）
