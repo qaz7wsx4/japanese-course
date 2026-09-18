@@ -6,6 +6,7 @@ import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
          getPlan, setPlan, clearPlan, countLessonsDone,
          getKanaState, recordKanaAttempt } from './progress.js?v=DEV';
 import { loadKana, getKanaSections, getKanaSection, buildKanaQuiz } from './kana.js?v=DEV';
+import { conjugate } from './conjugate.js?v=DEV';
 import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
 import { buildQuiz, buildReview } from './practice.js?v=DEV';
 
@@ -362,6 +363,7 @@ function runQuiz({ title, questions, onBack, onFinish, affectSchedule = true }) 
 
     el.view.appendChild(node('div', 'quiz-title' + (q.isReview ? ' review' : ''), q.title));
     if (q.jp) el.view.appendChild(jp(q.jp, 'quiz-jp'));                 // 句子：斷詞＋標假名
+    if (q.promptJp) el.view.appendChild(jp(q.promptJp, 'quiz-jp'));     // 活用題：動詞ます形，標假名
     if (q.prompt) el.view.appendChild(jpPlain(q.prompt, 'quiz-prompt')); // 單字：不標假名
     if (q.zh) el.view.appendChild(node('div', 'quiz-zh', q.zh));
 
@@ -563,7 +565,10 @@ Promise.all([
     tokenizer = tk;
     // 讓斷詞認得課程單字：台湾人、勉強します 這類 kuromoji 會切碎的詞才能保持完整
     // 課程單字 + 課程指定的額外讀音（四時半 這類不是單字、但 kuromoji 切法對不上單字表的詞）
-    registerWords(getLessons().flatMap((l) => [...l.vocab, ...(l.readings || [])]));
+    const allVocab = getLessons().flatMap((l) => l.vocab);
+    // 動詞的所有變化形也登記：食べて／書かない／来ない 才會被當成一塊、讀音才會對
+    const conjugated = allVocab.filter((v) => v.group).flatMap((v) => Object.values(conjugate(v)));
+    registerWords([...allVocab, ...getLessons().flatMap((l) => l.readings || []), ...conjugated]);
     el.loading.hidden = true;
     el.kanaWrap.hidden = false;
     backfillReview();

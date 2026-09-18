@@ -4,6 +4,7 @@
 
 import { analyze } from './tokenizer.js?v=DEV';
 import { vocabUpTo, wordForm, getVocab } from './curriculum.js?v=DEV';
+import { conjugate, wrongForms, GROUP_LABEL, FORM_LABEL } from './conjugate.js?v=DEV';
 
 const CORE_PARTICLES = ['は', 'が', 'を', 'に', 'で', 'へ', 'と', 'の'];
 
@@ -33,12 +34,15 @@ export function buildQuiz(lesson, tokenizer) {
 
   // 中文母語者看到漢字就知道意思，所以單字題的難度要放在「讀音」上：
   // 給漢字不給假名、或只給假名不給漢字。N5 的漢字読み／表記就是這樣考的。
+  // 有活用練習的課（第 11 課起），單字題少一點，把位置讓給活用題
+  const d = lesson.drill ? 1 : 0;
   const questions = [
-    ...sample(kanjiWords, 3).map((v) => readingQ(v, pool)),      // 漢字 → 選讀音
-    ...sample(current, 3).map((v) => zh2kanaQ(v, pool)),         // 中文 → 選假名
-    ...sample(current, 3).map((v) => kana2zhQ(v, pool)),         // 假名 → 選中文
-    ...sample(kanjiWords, 2).map((v) => kana2kanjiQ(v, pool)),   // 假名 → 選漢字
-    ...particleQuestions(lesson, tokenizer, 3),
+    ...sample(kanjiWords, 3 - d).map((v) => readingQ(v, pool)),      // 漢字 → 選讀音
+    ...sample(current, 3 - d).map((v) => zh2kanaQ(v, pool)),         // 中文 → 選假名
+    ...sample(current, 3 - d).map((v) => kana2zhQ(v, pool)),         // 假名 → 選中文
+    ...sample(kanjiWords, 2 - d).map((v) => kana2kanjiQ(v, pool)),   // 假名 → 選漢字
+    ...drillQuestions(lesson, pool, 5),                              // 活用（依課程指定的形態）
+    ...particleQuestions(lesson, tokenizer, 3 - d),
     ...orderQuestions(lesson, tokenizer, 2),
     // 穿插舊課單字，讓學過的東西持續回來
     ...sample(earlier, Math.min(2, earlier.length)).map((v) => reviewQ(v, pool)),
@@ -161,6 +165,38 @@ function reviewQ(v, pool, i = Math.floor(Math.random() * 3)) {
   if (kind === 0) return readingQ(v, pool, true);
   if (kind === 1) return kana2zhQ(v, pool, true);
   return zh2kanaQ(v, pool, true);
+}
+
+// ── 活用題 ──────────────────────────────────────────────
+// lesson.drill 指定要練哪個形態：group / te / nai / dict / ta。
+// 對象是到這一課為止所有標了組別的動詞，所以舊動詞也會回來練變化。
+// 干擾項由 wrongForms 產生——套錯規則的形態，是學習者真的會犯的錯。
+function drillQuestions(lesson, pool, want) {
+  if (!lesson.drill) return [];
+  const verbs = pool.filter((v) => v.group);
+  const out = [];
+  for (const v of sample(verbs, want)) {
+    const shown = v.kanji || v.kana;
+    if (lesson.drill === 'group') {
+      out.push({
+        type: 'drill-group', title: '這個動詞是哪一類？',
+        promptJp: shown, choices: [1, 2, 3].map((g) => GROUP_LABEL[g]), answer: v.group - 1,
+        choiceKind: 'text', vocabId: null,
+      });
+      continue;
+    }
+    const form = lesson.drill;
+    const correct = conjugate(v)[form].kanji;
+    const wrongs = wrongForms(v, form).slice(0, 3);
+    if (wrongs.length < 3) continue;
+    const opts = shuffle([correct, ...wrongs]);
+    out.push({
+      type: 'drill-' + form, title: `把它變成${FORM_LABEL[form]}`,
+      promptJp: shown, choices: opts, answer: opts.indexOf(correct),
+      choiceKind: 'kanji', vocabId: null,        // 活用對錯不代表忘了單字，不動複習排程
+    });
+  }
+  return out;
 }
 
 // ── 助詞填空（從例句自動生成）──────────────────────────

@@ -32,7 +32,8 @@
 
 `curriculum/lessons.json` 是唯一的內容來源。加一課就是加一個物件：
 
-- `vocab` — 單字。`kana` 必填；沒有漢字寫法就把 `kanji` 填 `null`
+- `vocab` — 單字。`kana` 必填；沒有漢字寫法就把 `kanji` 填 `null`；動詞加 `group`（1／2／3）
+- `drill`（選填）— 這一課的活用練習形態：`group` / `te` / `nai` / `dict` / `ta`
 - `grammar` — 文法點，每個含 `pattern` / `summary` / `detail` / `examples`
 - `readings`（選填）— 不是單字、但需要強制讀音的複合詞。kuromoji 的切法跟單字表對不上時用：
   例如它把「四時半」切成 四＋時半，單字表裡的「四時」就併不回來，得直接指定 四時半＝よじはん
@@ -73,6 +74,7 @@
       curriculum.js     課程資料載入
       practice.js       練習題產生器
       kana.js           假名練習題產生器
+      conjugate.js      動詞活用引擎（推導所有形態、產生套錯規則的干擾項）
       plan.js           學習計畫與進度比對
       progress.js       進度與解鎖（localStorage）
       tokenizer.js      kuromoji 載入、斷詞、詞塊合併、讀音覆寫
