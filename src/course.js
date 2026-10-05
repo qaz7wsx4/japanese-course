@@ -1,14 +1,15 @@
 import { loadTokenizer, analyze, registerWords } from './tokenizer.js?v=DEV';
 import { renderLines, renderToken } from './render.js?v=DEV';
-import { loadCurriculum, getLessons, getLesson, wordForm } from './curriculum.js?v=DEV';
+import { loadCurriculum, getLessons, getLesson, wordForm, vocabUpTo } from './curriculum.js?v=DEV';
 import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
          enrollVocab, getDueVocabIds, getEnrolledVocabIds, getReviewSummary,
          getPlan, setPlan, clearPlan, countLessonsDone,
          getKanaState, recordKanaAttempt } from './progress.js?v=DEV';
 import { loadKana, getKanaSections, getKanaSection, buildKanaQuiz } from './kana.js?v=DEV';
 import { conjugate } from './conjugate.js?v=DEV';
+import { initSpeech, speak, stopSpeaking, speechAvailable, missingVoiceHelp } from './speech.js?v=DEV';
 import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
-import { buildQuiz, buildReview } from './practice.js?v=DEV';
+import { buildQuiz, buildReview, buildListeningQuiz } from './practice.js?v=DEV';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -41,6 +42,7 @@ const node = (tag, cls, text) => {
 };
 
 function setView(title, back) {
+  stopSpeaking();                 // 換畫面就停掉還在念的句子
   el.title.textContent = title;
   backAction = back;
   el.back.hidden = !back;
@@ -61,6 +63,7 @@ function renderHome() {
   renderPlanCard();
   renderReviewCard(lessons);
   renderKanaCard();
+  renderListeningCard(lessons);
 
   for (const lesson of lessons) {
     const state = getLessonState(lesson.id);
@@ -154,6 +157,59 @@ function backfillReview() {
   }
 }
 
+// ── 聽力卡（首頁）────────────────────────────────────────
+// N5 的聽解佔總分三分之一，而中文母語者看得懂卻聽不懂是常態。
+function renderListeningCard(lessons) {
+  const passed = lessons.filter((l) => getLessonState(l.id).done);
+  const maxLesson = passed.length ? Math.max(...passed.map((l) => l.id)) : 0;
+  if (!maxLesson) return;                 // 一課都還沒過，沒有題庫
+
+  const card = node('div', 'listen-card');
+  card.appendChild(node('div', 'listen-title', '聽力練習'));
+
+  if (!speechAvailable()) {
+    card.appendChild(node('div', 'listen-sub', missingVoiceHelp()));
+    el.view.appendChild(card);
+    return;
+  }
+
+  card.appendChild(node('div', 'listen-sub',
+    `只聽聲音、不給文字，從學過的 ${vocabUpTo(maxLesson).length} 個單字和句子出題。不影響複習排程。`));
+  const btn = node('button', 'primary wide', '開始聽力練習');
+  // 這一下點擊同時解鎖 iOS 的語音權限——iOS 第一次發聲必須在使用者手勢裡
+  btn.addEventListener('click', () => startListening(lessons, maxLesson));
+  card.appendChild(btn);
+  el.view.appendChild(card);
+}
+
+function startListening(lessons, maxLesson) {
+  const passed = lessons.filter((l) => getLessonState(l.id).done);
+  const questions = buildListeningQuiz(vocabUpTo(maxLesson), passed, 12);
+  if (!questions.length) return renderHome();
+
+  runQuiz({
+    title: '聽力練習',
+    questions,
+    affectSchedule: false,
+    onBack: renderHome,
+    onFinish(correctCount, total) {
+      const pct = Math.round((correctCount / total) * 100);
+      setView('聽力練習 · 完成', renderHome);
+      el.view.appendChild(node('div', 'result-pct', `${pct}%`));
+      el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
+      el.view.appendChild(node('p', 'result-msg',
+        pct >= 80 ? '耳朵跟上了。聽力就是靠每天聽一點累積的。'
+          : '聽不出來很正常——看得懂跟聽得懂是兩種能力。多用慢速鍵，聽到能分辨為止。'));
+      const again = node('button', 'primary wide', '再練一次');
+      again.addEventListener('click', () => startListening(lessons, maxLesson));
+      el.view.appendChild(again);
+      const home = node('button', 'ghost wide', '回課程列表');
+      home.addEventListener('click', renderHome);
+      el.view.appendChild(home);
+    },
+  });
+}
+
 // ── 假名基礎卡（首頁）────────────────────────────────────
 // 不擋課程進度：已經在上課的人隨時可以回來補濁音、拗音。
 function renderKanaCard() {
@@ -227,6 +283,19 @@ function startKanaQuiz(sec) {
       el.view.appendChild(home);
     },
   });
+}
+
+/** 聽力題的播放控制：自動念一次，另外給重播與慢速 */
+function audioControls(q) {
+  const box = node('div', 'audio-box');
+  const play = node('button', 'audio-btn', '🔊 再聽一次');
+  play.addEventListener('click', () => speak(q.audio, 0.85));
+  const slow = node('button', 'audio-btn slow', '🐢 慢速');
+  slow.addEventListener('click', () => speak(q.audio, 0.55));
+  box.append(play, slow);
+  // 題目一出現就念一次；iOS 已經被「開始聽力練習」那一下解鎖了
+  setTimeout(() => speak(q.audio, 0.85), 150);
+  return box;
 }
 
 // ── 進度卡（首頁）────────────────────────────────────────
@@ -365,6 +434,7 @@ function runQuiz({ title, questions, onBack, onFinish, affectSchedule = true }) 
     if (q.jp) el.view.appendChild(jp(q.jp, 'quiz-jp'));                 // 句子：斷詞＋標假名
     if (q.promptJp) el.view.appendChild(jp(q.promptJp, 'quiz-jp'));     // 活用題：動詞ます形，標假名
     if (q.prompt) el.view.appendChild(jpPlain(q.prompt, 'quiz-prompt')); // 單字：不標假名
+    if (q.audio) el.view.appendChild(audioControls(q));                  // 聽力：只有聲音，不給文字
     if (q.zh) el.view.appendChild(node('div', 'quiz-zh', q.zh));
 
     if (q.type === 'order') renderOrder(q, onAnswered);
@@ -374,6 +444,13 @@ function runQuiz({ title, questions, onBack, onFinish, affectSchedule = true }) 
   function onAnswered(ok, q) {
     if (ok) correctCount++;
     recordAnswer(q.vocabId, ok, affectSchedule);
+    // 聽力題答完才揭曉文字——答題當下看到就不是聽力了
+    if (q.revealJp) {
+      const box = node('div', 'listen-reveal');
+      box.appendChild(node('span', 'listen-reveal-label', '剛才念的是'));
+      box.appendChild(jp(q.revealJp));
+      el.view.appendChild(box);
+    }
     const next = node('button', 'primary wide', index + 1 >= questions.length ? '看結果' : '下一題');
     next.addEventListener('click', () => { index++; showQuestion(); });
     el.view.appendChild(next);
@@ -573,6 +650,7 @@ Promise.all([
     el.kanaWrap.hidden = false;
     backfillReview();
     renderHome();
+    initSpeech().then(() => renderHome());   // 語音清單是非同步的，載到了再重畫首頁
   })
   .catch((err) => {
     el.loadingTitle.textContent = '載入失敗';

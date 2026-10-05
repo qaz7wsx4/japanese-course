@@ -75,6 +75,7 @@
       practice.js       練習題產生器
       kana.js           假名練習題產生器
       conjugate.js      動詞活用引擎（推導所有形態、產生套錯規則的干擾項）
+      speech.js         日文語音合成（語音挑選、慢速、缺語音時的引導）
       plan.js           學習計畫與進度比對
       progress.js       進度與解鎖（localStorage）
       tokenizer.js      kuromoji 載入、斷詞、詞塊合併、讀音覆寫

@@ -167,6 +167,70 @@ function reviewQ(v, pool, i = Math.floor(Math.random() * 3)) {
   return zh2kanaQ(v, pool, true);
 }
 
+/**
+ * 聽力練習。
+ * @param {object[]} words 可出題的單字（已學過的）
+ * @param {object[]} passedLessons 已通過的課，用來抽句子題
+ */
+export function buildListeningQuiz(words, passedLessons, count = 12) {
+  if (!words.length) return [];
+  const pool = words;
+
+  // 單字題念假名不念漢字：我們有權威的讀音，TTS 讀漢字可能讀成另一個音
+  // （日本人 會被念成 にっぽんじん，跟課程教的不一致）。
+  const wordQs = sample(pool, Math.ceil(count * 0.7)).map((v, i) =>
+    i % 2 === 0 ? listen2zh(v, pool) : listen2kana(v, pool)
+  );
+
+  // 句子題念原句（含漢字）：TTS 處理正常日文比處理純假名串自然得多，
+  // 斷句也才會對。代價是少數詞可能讀成另一個合法讀音，聽力上可以接受。
+  const sentQs = [];
+  for (const L of shuffle(passedLessons)) {
+    if (sentQs.length >= Math.floor(count * 0.3)) break;
+    const exs = shuffle(L.grammar.flatMap((g) => g.examples).filter((ex) => !ex.noQuiz));
+    for (const ex of exs.slice(0, 1)) {
+      const others = shuffle(
+        passedLessons.flatMap((x) => x.grammar.flatMap((g) => g.examples))
+          .filter((e) => !e.noQuiz && e.zh !== ex.zh)
+      ).slice(0, 3);
+      if (others.length < 3) continue;
+      const opts = shuffle([ex, ...others]);
+      sentQs.push({
+        type: 'listen-sentence', title: '這句話的意思是？',
+        audio: ex.jp, revealJp: ex.jp,
+        choices: opts.map((o) => o.zh), answer: opts.indexOf(ex),
+        choiceKind: 'text', vocabId: null,
+      });
+    }
+  }
+
+  return shuffle([...wordQs, ...sentQs].filter(Boolean)).slice(0, count);
+}
+
+function listen2zh(v, pool) {
+  const ds = distractors(v, pool, 3, () => 0);
+  if (ds.length < 3) return null;
+  const opts = shuffle([v, ...ds]);
+  return {
+    type: 'listen2zh', title: '聽到的詞是什麼意思？',
+    audio: v.kana, revealJp: wordForm(v),
+    choices: opts.map((c) => c.zh), answer: opts.indexOf(v),
+    choiceKind: 'text', vocabId: v.id,
+  };
+}
+
+function listen2kana(v, pool) {
+  const ds = distractors(v, pool, 3, lenDiff(v));
+  if (ds.length < 3) return null;
+  const opts = shuffle([v, ...ds]);
+  return {
+    type: 'listen2kana', title: '聽到的是哪一個？',
+    audio: v.kana, revealJp: wordForm(v),
+    choices: opts.map((c) => c.kana), answer: opts.indexOf(v),
+    choiceKind: 'kana', vocabId: v.id,
+  };
+}
+
 // ── 活用題 ──────────────────────────────────────────────
 // lesson.drill 指定要練哪個形態：group / te / nai / dict / ta。
 // 對象是到這一課為止所有標了組別的動詞，所以舊動詞也會回來練變化。
