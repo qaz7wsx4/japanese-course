@@ -10,6 +10,9 @@
 const TE   = { き:'いて', ぎ:'いで', し:'して', ち:'って', り:'って', い:'って', に:'んで', び:'んで', み:'んで' };
 const NAI  = { き:'か',   ぎ:'が',   し:'さ',   ち:'た',   り:'ら',   い:'わ',   に:'な',   び:'ば',   み:'ま'   };
 const DICT = { き:'く',   ぎ:'ぐ',   し:'す',   ち:'つ',   り:'る',   い:'う',   に:'ぬ',   び:'ぶ',   み:'む'   };
+// 可能形：い段→え段。意向形：い段→お段＋う。
+const POT  = { き:'け',   ぎ:'げ',   し:'せ',   ち:'て',   り:'れ',   い:'え',   に:'ね',   び:'べ',   み:'め'   };
+const VOL  = { き:'こ',   ぎ:'ご',   し:'そ',   ち:'と',   り:'ろ',   い:'お',   に:'の',   び:'ぼ',   み:'も'   };
 
 const teToTa = (te) => te.replace(/て$/, 'た').replace(/で$/, 'だ');
 
@@ -25,17 +28,21 @@ function baseForms(base, kana, group, isKana) {
   if (group === 3) {
     if (kana.endsWith('します')) {
       const s = base.slice(0, -3);
-      return { te: s + 'して', ta: s + 'した', nai: s + 'しない', dict: s + 'する' };
+      // 可能形不規則：します → できます（不是 ×しられます）
+      return { te: s + 'して', ta: s + 'した', nai: s + 'しない', dict: s + 'する',
+               pot: s + 'できます', vol: s + 'しよう' };
     }
     if (kana === 'きます') {                      // 来ます：假名不規則，漢字不變
       return isKana
-        ? { te: 'きて', ta: 'きた', nai: 'こない', dict: 'くる' }
-        : { te: stem + 'て', ta: stem + 'た', nai: stem + 'ない', dict: stem + 'る' };
+        ? { te: 'きて', ta: 'きた', nai: 'こない', dict: 'くる', pot: 'こられます', vol: 'こよう' }
+        : { te: stem + 'て', ta: stem + 'た', nai: stem + 'ない', dict: stem + 'る',
+            pot: stem + 'られます', vol: stem + 'よう' };
     }
   }
 
   if (group === 2) {
-    return { te: stem + 'て', ta: stem + 'た', nai: stem + 'ない', dict: stem + 'る' };
+    return { te: stem + 'て', ta: stem + 'た', nai: stem + 'ない', dict: stem + 'る',
+             pot: stem + 'られます', vol: stem + 'よう' };
   }
 
   // I 類
@@ -47,13 +54,14 @@ function baseForms(base, kana, group, isKana) {
   if (kana === 'いきます') te = s + 'って';       // 行きます → 行って，唯一的例外
   let nai = s + NAI[last] + 'ない';
   if (kana === 'あります') nai = 'ない';           // あります 的否定是 ない，不是 あらない
-  return { te, ta: teToTa(te), nai, dict: s + DICT[last] };
+  return { te, ta: teToTa(te), nai, dict: s + DICT[last],
+           pot: s + POT[last] + 'ます', vol: s + VOL[last] + 'う' };
 }
 
 /**
  * @param {{kanji: string|null, kana: string, group: number}} v
  * @returns {Record<string, {kanji: string, kana: string}>}
- *   masu / te / ta / nai / dict / naide / nakereba / nakute / nakatta / tari
+ *   masu / te / ta / nai / dict / naide / nakereba / nakute / nakatta / tari / tara / pot / vol
  */
 export function conjugate(v) {
   const kanjiBase = v.kanji || v.kana;
@@ -74,6 +82,9 @@ export function conjugate(v) {
     nakute:   pair(naiStem(k.nai) + 'なくて',   naiStem(h.nai) + 'なくて'),
     nakatta:  pair(naiStem(k.nai) + 'なかった', naiStem(h.nai) + 'なかった'),
     tari:     pair(k.ta + 'り', h.ta + 'り'),
+    tara:     pair(k.ta + 'ら', h.ta + 'ら'),       // 条件形：た形＋ら
+    pot:      pair(k.pot, h.pot),                   // 可能形
+    vol:      pair(k.vol, h.vol),                   // 意向形
   };
 }
 
@@ -86,7 +97,9 @@ export function wrongForms(v, form) {
   const base = v.kanji || v.kana;
   const stem = base.slice(0, -2);
   const s = stem.slice(0, -1);
-  const correct = conjugate(v)[form].kanji;
+  const c = conjugate(v);
+  const correct = c[form].kanji;
+  const dict = c.dict.kanji;        // 「辞書形＋よう／れます」是很常見的錯法
 
   // 依「像不像人會犯的錯」排序，練習題取前三個。
   //   I 類：當成 II 類（書きて）、套錯 I 類規則（書って、書んで）
@@ -121,6 +134,24 @@ export function wrongForms(v, form) {
             : isII  ? [stem + 'う', stem + 'く', stem + 'つ', stem + 'む']
                     : [stem + 'る', s + 'う', s + 'く', s + 'す', s + 'つ', s + 'む'];
       break;
+    case 'tara':
+      cands = isIII ? [stem + 'ったら', stem + 'いたら', stem + 'んだら']
+            : isII  ? [stem + 'ったら', stem + 'んだら', stem + 'いたら']
+                    : [stem + 'たら', s + 'ったら', s + 'んだら', s + 'いたら', s + 'したら'];
+      break;
+    case 'pot':
+      // 典型錯法：I 類誤用被動形（×撮られます）或套成 II 類（×撮りられます）；
+      //           II 類漏掉ら（ら抜き，×食べれます）；III 類把 します 當規則動詞（×しられます）
+      cands = isIII ? [stem + 'られます', stem + 'れます', stem + 'できます', stem + 'えます']
+            : isII  ? [stem + 'れます', stem + 'えます', stem + 'せます', dict + 'れます']
+                    : [s + 'られます', stem + 'られます', stem + 'れます', stem + 'えます'];
+      break;
+    case 'vol':
+      // 共通錯法：直接在辞書形後面加よう（×書くよう）
+      cands = isIII ? [dict + 'よう', stem + 'ろう', stem + 'おう', stem + 'いよう']
+            : isII  ? [dict + 'よう', stem + 'おう', stem + 'ろう', stem + 'とう']
+                    : [stem + 'よう', dict + 'よう', s + 'おう', s + 'とう', s + 'もう'];
+      break;
     case 'nakatta':
       cands = isIII ? [stem + 'らなかった', stem + 'りなかった', stem + 'かなかった', stem + 'わなかった']
             : isII  ? [stem + 'らなかった', stem + 'わなかった', stem + 'りなかった', stem + 'かなかった']
@@ -135,4 +166,5 @@ export function wrongForms(v, form) {
 export const GROUP_LABEL = { 1: 'I 類', 2: 'II 類', 3: 'III 類' };
 export const FORM_LABEL = {
   te: 'て形', ta: 'た形', nai: 'ない形', dict: '辞書形', nakatta: '過去否定的普通形',
+  tara: '〜たら（条件形）', pot: '可能形', vol: '意向形',
 };

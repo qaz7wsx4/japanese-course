@@ -159,9 +159,15 @@ export function clearPlan() {
   write(s);
 }
 
-/** 已完成的課數（課是依序解鎖的，所以數 done 的就好） */
-export function countLessonsDone() {
-  return Object.values(read().lessons).filter((l) => l.done).length;
+/**
+ * 已完成的課數。
+ * @param {number[]} [onlyIds] 只數這些課（進度表傳 N5 的課號，
+ *   否則上完 N4 會出現「完成 28 / 25 課」這種鬼話）
+ */
+export function countLessonsDone(onlyIds) {
+  const done = read().lessons;
+  if (!onlyIds) return Object.values(done).filter((l) => l.done).length;
+  return onlyIds.filter((id) => done[id] && done[id].done).length;
 }
 
 export function resetAll() {

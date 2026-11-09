@@ -55,9 +55,11 @@ function renderHome() {
   setView('日文課程', null);
 
   const lessons = getLessons();
-  const doneCount = lessons.filter((l) => getLessonState(l.id).done).length;
+  const n5 = lessons.filter((l) => (l.level || 'N5') === 'N5');
+  const n4 = lessons.filter((l) => l.level === 'N4');
+  const doneN5 = n5.filter((l) => getLessonState(l.id).done).length;
 
-  const summary = node('p', 'summary', `已完成 ${doneCount} / ${lessons.length} 課`);
+  const summary = node('p', 'summary', `N5 課程 ${doneN5} / ${n5.length} 課`);
   el.view.appendChild(summary);
 
   renderPlanCard();
@@ -65,6 +67,24 @@ function renderHome() {
   renderKanaCard();
   renderListeningCard(lessons);
 
+  renderLessonList(n5);
+
+  if (n4.length) {
+    const head = node('div', 'level-head');
+    head.appendChild(node('span', 'level-name', 'N4'));
+    head.appendChild(node('span', 'level-note',
+      doneN5 === n5.length ? 'N5 的文法走完了，這裡是下一階'
+                           : `先把 N5 的 ${n5.length} 課上完，這一段不算在 N5 的考試進度裡`));
+    el.view.appendChild(head);
+    renderLessonList(n4);
+  }
+
+  if (doneN5 < n5.length && !isUnlocked(2)) {
+    el.view.appendChild(node('p', 'note', '完成一課之後，下一課才會解鎖。'));
+  }
+}
+
+function renderLessonList(lessons) {
   for (const lesson of lessons) {
     const state = getLessonState(lesson.id);
     const unlocked = isUnlocked(lesson.id);
@@ -83,10 +103,6 @@ function renderHome() {
 
     card.addEventListener('click', () => renderLesson(lesson.id));
     el.view.appendChild(card);
-  }
-
-  if (doneCount < lessons.length && !isUnlocked(2)) {
-    el.view.appendChild(node('p', 'note', '完成一課之後，下一課才會解鎖。'));
   }
 }
 
@@ -327,7 +343,8 @@ function renderPlanCard() {
     return;
   }
 
-  const pace = computePace(plan, countLessonsDone());
+  const n5Ids = getLessons().filter((l) => (l.level || 'N5') === 'N5').map((l) => l.id);
+  const pace = computePace(plan, countLessonsDone(n5Ids));
   const head = node('div', 'plan-head');
   head.appendChild(node('div', 'plan-title', `目標 ${fmtDate(plan.examDate)}`));
   const change = node('button', 'link', '更改');
@@ -350,7 +367,7 @@ function renderPlanCard() {
   const line = node('div', 'plan-line');
   line.appendChild(node('span', '', `還有 ${pace.weeksLeft} 週`));
   line.appendChild(node('span', 'plan-dot', '·'));
-  line.appendChild(node('span', '', `完成 ${countLessonsDone()} / ${TOTAL_LESSONS} 課`));
+  line.appendChild(node('span', '', `完成 ${countLessonsDone(n5Ids)} / ${TOTAL_LESSONS} 課`));
   line.appendChild(node('span', 'plan-dot', '·'));
   line.appendChild(node('span', 'plan-status ' + cls, status));
   card.appendChild(line);

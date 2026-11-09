@@ -33,7 +33,9 @@
 `curriculum/lessons.json` 是唯一的內容來源。加一課就是加一個物件：
 
 - `vocab` — 單字。`kana` 必填；沒有漢字寫法就把 `kanji` 填 `null`；動詞加 `group`（1／2／3）
-- `drill`（選填）— 這一課的活用練習形態：`group` / `te` / `nai` / `dict` / `ta` / `nakatta`
+- `level`（選填，預設 N5）— `"N5"` 或 `"N4"`。首頁依此分區，**考試進度表只計 N5 的課**，
+  否則上完 N4 會顯示「完成 28 / 25 課」
+- `drill`（選填）— 活用練習形態：`group` / `te` / `nai` / `dict` / `ta` / `nakatta` / `tara` / `pot` / `vol`
 - `grammar` — 文法點，每個含 `pattern` / `summary` / `detail` / `examples`
 - `readings`（選填）— 不是單字、但需要強制讀音的複合詞。kuromoji 的切法跟單字表對不上時用：
   例如它把「四時半」切成 四＋時半，單字表裡的「四時」就併不回來，得直接指定 四時半＝よじはん
