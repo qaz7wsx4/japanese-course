@@ -533,3 +533,53 @@ button.link {
   border: 1px solid var(--accent); border-radius: 999px; padding: 1px 10px;
 }
 .level-note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── 模擬考 ── */
+.exam-card {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.exam-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.exam-sub { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.exam-warn { font-size: 13px; color: var(--pos-verb); line-height: 1.7; margin-top: 8px; }
+.exam-card .wide { margin-top: 12px; }
+
+.exam-step { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.exam-row { display: flex; align-items: center; gap: 10px; margin: 8px 0 18px; }
+.exam-row .quiz-count { margin: 0; }
+.exam-kind {
+  font-size: 11px; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px;
+}
+.exam-timer {
+  margin-left: auto; font-size: 15px; font-variant-numeric: tabular-nums;
+  color: var(--muted); font-weight: 600;
+}
+.exam-timer.low { color: var(--pos-verb); }
+
+.exam-passage {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  font-size: 17px;
+  line-height: 2.1;
+}
+.exam-question { font-size: 18px; margin-bottom: 14px; }
+
+.exam-verdict { text-align: center; font-size: 20px; font-weight: 700; margin-top: 4px; }
+.exam-verdict.pass { color: var(--pos-adj); }
+.exam-verdict.fail { color: var(--pos-verb); }
+.exam-scores { margin: 22px 0 6px; }
+.exam-score-row {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+}
+.esr-label { flex: 1; }
+.esr-score { font-weight: 600; font-variant-numeric: tabular-nums; }
+.esr-pass { font-size: 12px; color: var(--muted); }
+.exam-score-row.miss .esr-score { color: var(--pos-verb); }

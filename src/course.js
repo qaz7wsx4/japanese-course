@@ -8,6 +8,7 @@ import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
 import { loadKana, getKanaSections, getKanaSection, buildKanaQuiz } from './kana.js?v=DEV';
 import { conjugate } from './conjugate.js?v=DEV';
 import { initSpeech, speak, stopSpeaking, speechAvailable, missingVoiceHelp } from './speech.js?v=DEV';
+import { loadExamData, buildExam, scoreExam, SCORING } from './exam.js?v=DEV';
 import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
 import { buildQuiz, buildReview, buildListeningQuiz } from './practice.js?v=DEV';
 
@@ -66,6 +67,7 @@ function renderHome() {
   renderReviewCard(lessons);
   renderKanaCard();
   renderListeningCard(lessons);
+  renderExamCard(lessons);
 
   renderLessonList(n5);
 
@@ -171,6 +173,203 @@ function backfillReview() {
   for (const l of getLessons()) {
     if (getLessonState(l.id).done) enrollVocab(l.vocab.map((v) => v.id), 0);
   }
+}
+
+// ── 模擬考 ────────────────────────────────────────────────
+function renderExamCard(lessons) {
+  const n5 = lessons.filter((l) => (l.level || 'N5') === 'N5');
+  const passed = n5.filter((l) => getLessonState(l.id).done);
+  if (passed.length < n5.length) return;        // N5 全部上完才開放
+
+  const card = node('div', 'exam-card');
+  card.appendChild(node('div', 'exam-title', 'N5 模擬考'));
+  card.appendChild(node('div', 'exam-sub',
+    '照正式考試的結構與計分：文字・語彙 20 分鐘、文法・読解 40 分鐘、聴解 30 分鐘，中途不給答案。'));
+  if (!speechAvailable()) {
+    card.appendChild(node('div', 'exam-warn', '這台裝置沒有日文語音，聴解那一節會跳過，無法判定及格。'));
+  }
+  const btn = node('button', 'primary wide', '開始模擬考');
+  btn.addEventListener('click', () => startExam(passed));
+  card.appendChild(btn);
+  el.view.appendChild(card);
+}
+
+function startExam(lessons) {
+  const sections = buildExam(tokenizer, lessons, speechAvailable());
+  const results = [];
+  let si = 0;
+
+  function intro() {
+    const sec = sections[si];
+    setView(`模擬考 · ${sec.name}`, null);
+    el.view.appendChild(node('div', 'exam-step', `第 ${si + 1} 節 / ${sections.length}`));
+    el.view.appendChild(node('h2', 'lesson-h2', sec.name));
+    el.view.appendChild(node('p', 'goal',
+      `${sec.questions.length} 題，限時 ${sec.minutes} 分鐘。作答中不會告訴你對錯，時間到會自動交卷。`));
+    const go = node('button', 'primary wide', '開始這一節');
+    go.addEventListener('click', () => runSection(sec));
+    el.view.appendChild(go);
+    const quit = node('button', 'ghost wide', '離開模擬考');
+    quit.addEventListener('click', renderHome);
+    el.view.appendChild(quit);
+  }
+
+  function runSection(sec) {
+    let index = 0, correct = 0;
+    const deadline = Date.now() + sec.minutes * 60000;
+    let timerEl = null, ticker = null;
+
+    const stopTimer = () => { if (ticker) clearInterval(ticker); ticker = null; };
+
+    function finishSection() {
+      stopTimer();
+      results.push({ id: sec.id, correct, total: sec.questions.length });
+      si++;
+      if (si < sections.length) intro(); else showResult();
+    }
+
+    function show() {
+      if (index >= sec.questions.length) return finishSection();
+      const q = sec.questions[index];
+      setView(`模擬考 · ${sec.name}`, null);
+
+      const bar = node('div', 'quiz-bar');
+      const fill = node('div', 'quiz-bar-fill');
+      fill.style.width = `${(index / sec.questions.length) * 100}%`;
+      bar.appendChild(fill);
+      el.view.appendChild(bar);
+
+      const row = node('div', 'exam-row');
+      row.appendChild(node('span', 'quiz-count', `${index + 1} / ${sec.questions.length}`));
+      row.appendChild(node('span', 'exam-kind', q.kind));
+      timerEl = node('span', 'exam-timer');
+      row.appendChild(timerEl);
+      el.view.appendChild(row);
+      tick();
+      stopTimer();
+      ticker = setInterval(tick, 1000);
+
+      if (q.passage) el.view.appendChild(jp(q.passage, 'exam-passage'));
+      el.view.appendChild(node('div', 'quiz-title', q.title));
+      if (q.stem) {
+        // 考題一律不標假名——標了漢字読み那一題就等於送分
+        el.view.appendChild(jpPlain(q.stem, q.passage ? 'exam-question' : 'quiz-prompt'));
+      }
+      if (q.audio) el.view.appendChild(audioControls(q));
+      if (q.zh) el.view.appendChild(node('div', 'quiz-zh', q.zh));
+
+      if (q.type === 'order') renderExamOrder(q, pick);
+      else renderExamChoices(q, pick);
+    }
+
+    function tick() {
+      const left = Math.max(0, deadline - Date.now());
+      if (timerEl) {
+        const m = Math.floor(left / 60000), s2 = Math.floor((left % 60000) / 1000);
+        timerEl.textContent = `${m}:${String(s2).padStart(2, '0')}`;
+        timerEl.classList.toggle('low', left < 120000);
+      }
+      if (left <= 0) finishSection();      // 時間到自動交卷，跟真考試一樣
+    }
+
+    function pick(ok) {
+      if (ok) correct++;
+      index++;
+      show();
+    }
+
+    show();
+  }
+
+  function showResult() {
+    const r = scoreExam(results);
+    setView('模擬考 · 結果', renderHome);
+
+    el.view.appendChild(node('div', 'result-pct', `${r.total} / ${SCORING.totalMax}`));
+    el.view.appendChild(node('div', 'exam-verdict ' + (r.passed ? 'pass' : 'fail'),
+      r.skippedListening ? '聴解未作答，無法判定' : (r.passed ? '合格' : '不合格')));
+
+    const table = node('div', 'exam-scores');
+    const rowOf = (label, got, max, pass, okFlag) => {
+      const row = node('div', 'exam-score-row' + (okFlag ? '' : ' miss'));
+      row.appendChild(node('span', 'esr-label', label));
+      row.appendChild(node('span', 'esr-score', `${got == null ? '—' : got} / ${max}`));
+      row.appendChild(node('span', 'esr-pass', `及格線 ${pass}`));
+      return row;
+    };
+    table.appendChild(rowOf(SCORING.knowledge.label, r.knowledge, SCORING.knowledge.max,
+                            SCORING.knowledge.pass, r.knowledgePassed));
+    table.appendChild(rowOf(SCORING.listening.label, r.listening, SCORING.listening.max,
+                            SCORING.listening.pass, r.listeningPassed));
+    el.view.appendChild(table);
+
+    const notes = [];
+    if (!r.knowledgePassed) notes.push(`言語知識・読解 沒到 ${SCORING.knowledge.pass} 分。`);
+    if (!r.skippedListening && !r.listeningPassed) notes.push(`聴解 沒到 ${SCORING.listening.pass} 分。`);
+    if (r.total < SCORING.totalPass) notes.push(`總分沒到 ${SCORING.totalPass} 分。`);
+    if (!notes.length && r.passed) notes.push('三個條件都過了。');
+    notes.push('任一區沒到及格線，總分再高也不合格——這是官方規則。');
+    el.view.appendChild(node('p', 'result-msg', notes.join(' ')));
+
+    el.view.appendChild(node('p', 'note',
+      '這份模擬考只涵蓋本課程教過的範圍（約 300 個單字），比真正的 N5 容易。' +
+      '分數當參考就好，不要當預測。考前請務必做官方公布的樣題。'));
+
+    const again = node('button', 'primary wide', '再考一次');
+    again.addEventListener('click', () => startExam(lessons));
+    el.view.appendChild(again);
+    const home = node('button', 'ghost wide', '回課程列表');
+    home.addEventListener('click', renderHome);
+    el.view.appendChild(home);
+  }
+
+  intro();
+}
+
+/** 模擬考的選擇題：選完直接進下一題，不顯示對錯 */
+function renderExamChoices(q, done) {
+  const box = node('div', 'choices');
+  q.choices.forEach((c, i) => {
+    const b = node('button', 'choice');
+    if (q.choiceKind === 'kana' || q.choiceKind === 'kanji') b.appendChild(jpPlain(c));
+    else b.textContent = c;
+    b.addEventListener('click', () => done(i === q.answer));
+    box.appendChild(b);
+  });
+  el.view.appendChild(box);
+}
+
+/** 模擬考的排列題：排完直接判定，不顯示正解 */
+function renderExamOrder(q, done) {
+  const built = node('div', 'order-built');
+  const pool = node('div', 'choices order-pool');
+  const chosen = [];
+  const chip = (tok, cls = '') => {
+    const b = node('div', 'jp-plain ' + cls);
+    b.textContent = tok.surface;          // 考題不標假名
+    return b;
+  };
+  const refresh = () => {
+    built.replaceChildren();
+    if (!chosen.length) built.appendChild(node('span', 'order-hint', '點詞排出正確的句子'));
+    else chosen.forEach((c) => built.appendChild(chip(c, 'order-chip')));
+  };
+  q.choices.forEach((tok) => {
+    const b = node('button', 'choice chip');
+    b.appendChild(chip(tok));
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      b.disabled = true; b.classList.add('used');
+      chosen.push(tok); refresh();
+      if (chosen.length === q.choices.length) {
+        done(chosen.map((c) => c.surface).join('') === q.solution.join(''));
+      }
+    });
+    pool.appendChild(b);
+  });
+  refresh();
+  el.view.appendChild(built);
+  el.view.appendChild(pool);
 }
 
 // ── 聽力卡（首頁）────────────────────────────────────────
@@ -654,6 +853,7 @@ Promise.all([
   }),
   loadCurriculum(),
   loadKana(),
+  loadExamData(),
 ])
   .then(([tk]) => {
     tokenizer = tk;

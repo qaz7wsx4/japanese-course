@@ -78,6 +78,7 @@
       kana.js           假名練習題產生器
       conjugate.js      動詞活用引擎（推導所有形態、產生套錯規則的干擾項）
       speech.js         日文語音合成（語音挑選、慢速、缺語音時的引導）
+      exam.js           模擬考組卷與計分（官方結構與及格線）
       plan.js           學習計畫與進度比對
       progress.js       進度與解鎖（localStorage）
       tokenizer.js      kuromoji 載入、斷詞、詞塊合併、讀音覆寫
@@ -88,6 +89,7 @@
     curriculum/
       lessons.json      課程內容
       kana.json         假名基礎（四節）
+      exam.json         模擬考的読解短文與即時応答
     vendor/kuromoji/    kuromoji + 詞典（17 MB，離線用）
     devserver.py        本機開發伺服器
     sync-to-nas.sh      同步到自家 NAS（選用）

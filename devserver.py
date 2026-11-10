@@ -4,7 +4,7 @@
 
 用法：./devserver.py [埠號]     預設 8000，固定服務這個腳本所在的資料夾。
 """
-import functools, http.server, os, socketserver, sys
+import functools, http.server, os, sys
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -14,8 +14,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-store, must-revalidate')
         super().end_headers()
 
-socketserver.TCPServer.allow_reuse_address = True
+# 一定要用 ThreadingHTTPServer：kuromoji 會同時抓 12 個字典檔，
+# 單執行緒的 TCPServer 會把後面的連線重置掉。
+http.server.ThreadingHTTPServer.allow_reuse_address = True
+http.server.ThreadingHTTPServer.daemon_threads = True
 handler = functools.partial(Handler, directory=ROOT)
-with socketserver.TCPServer(('', PORT), handler) as httpd:
+with http.server.ThreadingHTTPServer(('', PORT), handler) as httpd:
     print(f'開發伺服器 http://localhost:{PORT}  （服務 {ROOT}）')
     httpd.serve_forever()
