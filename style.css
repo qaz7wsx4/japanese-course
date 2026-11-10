@@ -583,3 +583,41 @@ button.link {
 .esr-score { font-weight: 600; font-variant-numeric: tabular-nums; }
 .esr-pass { font-size: 12px; color: var(--muted); }
 .exam-score-row.miss .esr-score { color: var(--pos-verb); }
+
+/* ── 模擬考錯題檢討 ── */
+.exam-last {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.exam-last-date { color: var(--muted); }
+.exam-last-score { font-weight: 600; font-variant-numeric: tabular-nums; }
+.exam-last-wrong { margin-left: auto; color: var(--pos-verb); }
+
+.review-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+.ri-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.ri-no {
+  font-size: 12px; font-weight: 700; color: var(--bg); background: var(--muted);
+  border-radius: 999px; min-width: 20px; height: 20px; line-height: 20px; text-align: center;
+}
+.ri-lesson { font-size: 11px; color: var(--muted); margin-left: auto; }
+.ri-title { font-size: 13px; color: var(--muted); margin-bottom: 6px; line-height: 1.6; }
+.ri-stem { font-size: 19px; margin-bottom: 8px; }
+.ri-zh { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 10px; }
+.review-item .audio-btn { margin-bottom: 12px; }
+
+.ri-line, .ri-full {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 0; border-top: 1px solid var(--border);
+}
+.ri-label { flex: 0 0 52px; font-size: 12px; color: var(--muted); }
+.ri-line .ri-text, .ri-full .ri-text { font-size: 17px; line-height: 1.9; }
+.ri-line.wrong .ri-text { color: var(--pos-verb); }
+.ri-line.wrong .ri-text.none { color: var(--muted); font-size: 13px; }
+.ri-line.right .ri-text { color: var(--pos-adj); font-weight: 600; }

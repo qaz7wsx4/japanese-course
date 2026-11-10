@@ -88,13 +88,15 @@ function buildVocabSection(pool, lessons, count) {
   for (const v of sample(kanjiWords, Math.ceil(count * 0.35))) {
     const o = pickOptions(v.kana, kanjiWords.map((x) => x.kana), 3, similarKana(v.kana));
     if (o) out.push({ kind: '漢字読み', stem: v.kanji, stemPlain: true,
-                      title: 'この言葉の読み方は？', ...o, choiceKind: 'kana' });
+                      title: 'この言葉の読み方は？', ...o, choiceKind: 'kana',
+                      wordId: v.id, lesson: v.lesson, reviewJp: wordForm(v), reviewZh: v.zh });
   }
   // 表記：給假名選漢字。干擾項優先挑共用漢字的
   for (const v of sample(kanjiWords, Math.ceil(count * 0.25))) {
     const o = pickOptions(v.kanji, kanjiWords.map((x) => x.kanji), 3, similarKanji(v.kanji));
     if (o) out.push({ kind: '表記', stem: v.kana, stemPlain: true,
-                      title: 'この言葉の漢字は？', ...o, choiceKind: 'kanji' });
+                      title: 'この言葉の漢字は？', ...o, choiceKind: 'kanji',
+                      wordId: v.id, lesson: v.lesson, reviewJp: wordForm(v), reviewZh: v.zh });
   }
   // 文脈規定：例句挖掉一個詞，選填進去的詞
   const exs = shuffle(lessons.flatMap((l) => l.grammar.flatMap((g) => g.examples)).filter((e) => !e.noQuiz));
@@ -113,7 +115,8 @@ function buildVocabSection(pool, lessons, count) {
     const o = pickOptions(t.surface, samePos, 3, similarKanji(t.surface));
     if (!o) continue;
     out.push({ kind: '文脈規定', stem: ex.jp.replace(t.surface, '（　　）'), stemPlain: true,
-               title: '（　　）に入るものは？', ...o, choiceKind: 'kanji' });
+               title: '（　　）に入るものは？', ...o, choiceKind: 'kanji',
+               reviewJp: ex.jp, reviewZh: ex.zh });
   }
   return shuffle(out).slice(0, count);
 }
@@ -134,7 +137,8 @@ function buildGrammarSection(pool, lessons, reading, count) {
     const stem = toks.map((x) => (!replaced && x === t ? (replaced = true, '（　　）') : x.surface)).join('');
     const o = pickOptions(t.surface, CORE_PARTICLES);
     if (o) out.push({ kind: '文法形式', stem, stemPlain: true,
-                      title: '（　　）に入るものは？', ...o, choiceKind: 'kana' });
+                      title: '（　　）に入るものは？', ...o, choiceKind: 'kana',
+                      reviewJp: ex.jp, reviewZh: ex.zh });
   }
 
   // 文の組み立て：把打散的詞排回去
@@ -146,7 +150,8 @@ function buildGrammarSection(pool, lessons, reading, count) {
     let order = shuffle(correct.map((_, i) => i));
     if (order.every((v, i) => v === i)) order = order.reverse();
     out.push({ kind: '文の組み立て', type: 'order', title: '正しい順に並べてください',
-               zh: ex.zh, choices: order.map((i) => toks[i]), solution: correct });
+               zh: ex.zh, choices: order.map((i) => toks[i]), solution: correct,
+               reviewJp: ex.jp, reviewZh: ex.zh });
   }
 
   // 読解：短文＋設問
@@ -158,7 +163,7 @@ function buildGrammarSection(pool, lessons, reading, count) {
       if (added >= need) break;
       out.push({ kind: '読解', passage: p.text, stem: q.q, stemPlain: false,
                  title: '本文を読んで答えてください', choices: q.choices, answer: q.answer,
-                 choiceKind: 'kana' });
+                 choiceKind: 'kana', reviewZh: q.zh, passageZh: p.zh });
       added++;
     }
   }
@@ -174,14 +179,15 @@ function buildListenSection(pool, quickResponse, count) {
     const o = pickOptions(v.zh, pool.map((x) => x.zh), 3,
                           (x) => Math.abs(x.length - v.zh.length));
     if (o) out.push({ kind: '課題理解', audio: v.kana, revealJp: wordForm(v),
-                      title: '聞いて、正しい意味を選んでください', ...o, choiceKind: 'text' });
+                      title: '聞いて、正しい意味を選んでください', ...o, choiceKind: 'text',
+                      wordId: v.id, lesson: v.lesson });   // 正解就是中文意思，不另外標
   }
   for (const q of sample(quickResponse, nQuick)) {
     const opts = shuffle(q.choices.map((c, i) => ({ c, ok: i === q.answer })));
     out.push({ kind: '即時応答', audio: q.prompt, revealJp: q.prompt,
                title: '聞いて、正しい返事を選んでください',
                choices: opts.map((o) => o.c), answer: opts.findIndex((o) => o.ok),
-               choiceKind: 'kana' });
+               choiceKind: 'kana', reviewZh: q.zh });
   }
   return shuffle(out).slice(0, count);
 }
@@ -205,6 +211,34 @@ export function buildExam(tokenizer, lessons, canListen) {
     sections.push({ ...SECTIONS[2], questions: buildListenSection(pool, examData.quickResponse, SECTIONS[2].count) });
   }
   return sections;
+}
+
+/**
+ * 把一題的作答結果壓成可以存進 localStorage 的檢討紀錄。
+ * 存文字而不是存題目物件——排列題的 choices 是 token 物件，而且題庫每次重組都不一樣，
+ * 存下來的紀錄必須在離開這場考試之後還讀得懂。
+ * @param {string|null} your 使用者選的那個選項的文字；null 代表時間到沒作答
+ */
+export function reviewRecord(sectionId, sectionName, q, your) {
+  return {
+    section: sectionId,
+    sectionName,
+    kind: q.kind,
+    type: q.type || 'choice',
+    title: q.title,
+    stem: q.stem || null,
+    passage: q.passage || null,
+    passageZh: q.passageZh || null,
+    audio: q.audio || null,
+    revealJp: q.revealJp || null,
+    reviewJp: q.reviewJp || null,
+    reviewZh: q.reviewZh || null,
+    choiceKind: q.choiceKind || 'text',
+    your: your ?? null,
+    right: q.type === 'order' ? q.solution.join('') : q.choices[q.answer],
+    wordId: q.wordId || null,
+    lesson: q.lesson || null,
+  };
 }
 
 /**

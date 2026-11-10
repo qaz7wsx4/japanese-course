@@ -10,9 +10,9 @@ export const PASS_SCORE = 70;
 function read() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, ...s };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null, ...s };
   } catch {
-    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {} };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null };
   }
 }
 
@@ -150,6 +150,18 @@ export function getPlan() {
 export function setPlan(examDate, startDate) {
   const s = read();
   s.plan = { examDate, startDate };
+  write(s);
+}
+
+// ── 模擬考 ────────────────────────────────────────────────
+// 只留最後一次的成績與錯題。要的是「這次哪裡錯」，不是歷次成績的折線圖；
+// 存全部歷史會讓 localStorage 無限長大，而舊考卷的錯題早就複習過了。
+export function getExamResult() {
+  return read().exam;
+}
+export function saveExamResult(rec) {
+  const s = read();
+  s.exam = rec;
   write(s);
 }
 

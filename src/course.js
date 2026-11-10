@@ -4,11 +4,12 @@ import { loadCurriculum, getLessons, getLesson, wordForm, vocabUpTo } from './cu
 import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
          enrollVocab, getDueVocabIds, getEnrolledVocabIds, getReviewSummary,
          getPlan, setPlan, clearPlan, countLessonsDone,
-         getKanaState, recordKanaAttempt } from './progress.js?v=DEV';
+         getKanaState, recordKanaAttempt,
+         getExamResult, saveExamResult } from './progress.js?v=DEV';
 import { loadKana, getKanaSections, getKanaSection, buildKanaQuiz } from './kana.js?v=DEV';
 import { conjugate } from './conjugate.js?v=DEV';
 import { initSpeech, speak, stopSpeaking, speechAvailable, missingVoiceHelp } from './speech.js?v=DEV';
-import { loadExamData, buildExam, scoreExam, SCORING } from './exam.js?v=DEV';
+import { loadExamData, buildExam, scoreExam, reviewRecord, SCORING, SECTIONS } from './exam.js?v=DEV';
 import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
 import { buildQuiz, buildReview, buildListeningQuiz } from './practice.js?v=DEV';
 
@@ -188,15 +189,34 @@ function renderExamCard(lessons) {
   if (!speechAvailable()) {
     card.appendChild(node('div', 'exam-warn', '這台裝置沒有日文語音，聴解那一節會跳過，無法判定及格。'));
   }
+  const last = getExamResult();
+  if (last) {
+    const line = node('div', 'exam-last');
+    line.appendChild(node('span', 'exam-last-date', fmtDate(last.date)));
+    line.appendChild(node('span', 'exam-last-score',
+      `${last.total} / ${SCORING.totalMax}`));
+    line.appendChild(node('span', 'exam-last-wrong',
+      last.wrong.length ? `錯 ${last.wrong.length} 題` : '全對'));
+    card.appendChild(line);
+  }
+
   const btn = node('button', 'primary wide', '開始模擬考');
   btn.addEventListener('click', () => startExam(passed));
   card.appendChild(btn);
+
+  if (last && last.wrong.length) {
+    const rev = node('button', 'ghost wide', `檢討上次的 ${last.wrong.length} 題錯題`);
+    rev.addEventListener('click', () => renderExamReview(last, renderHome));
+    card.appendChild(rev);
+  }
   el.view.appendChild(card);
 }
 
 function startExam(lessons) {
   const sections = buildExam(tokenizer, lessons, speechAvailable());
   const results = [];
+  const wrong = [];          // 錯題與沒作答的題目，考完才拿出來檢討
+  let finalRec = null;       // 算過一次就定案，回到結果頁不會重算、也不會重複扣複習格
   let si = 0;
 
   function intro() {
@@ -223,6 +243,12 @@ function startExam(lessons) {
 
     function finishSection() {
       stopTimer();
+      // 時間到時還沒作答的題目也要留紀錄，不然檢討表會漏題，
+      // 而「這一節寫不完」本身就是最該檢討的事。
+      for (let i = index; i < sec.questions.length; i++) {
+        wrong.push(reviewRecord(sec.id, sec.name, sec.questions[i], null));
+      }
+      index = sec.questions.length;
       results.push({ id: sec.id, correct, total: sec.questions.length });
       si++;
       if (si < sections.length) intro(); else showResult();
@@ -272,8 +298,9 @@ function startExam(lessons) {
       if (left <= 0) finishSection();      // 時間到自動交卷，跟真考試一樣
     }
 
-    function pick(ok) {
+    function pick(ok, your) {
       if (ok) correct++;
+      else wrong.push(reviewRecord(sec.id, sec.name, sec.questions[index], your));
       index++;
       show();
     }
@@ -282,7 +309,14 @@ function startExam(lessons) {
   }
 
   function showResult() {
-    const r = scoreExam(results);
+    if (!finalRec) {
+      finalRec = { date: localDate(), ...scoreExam(results), sections: results, wrong };
+      saveExamResult(finalRec);
+      // 考錯的單字掉回複習第一格，明天的複習卡就會把它們推回來——
+      // 知道錯在哪而沒有再見到它，等於沒複習。
+      for (const w of wrong) if (w.wordId) recordAnswer(w.wordId, false);
+    }
+    const r = finalRec;
     setView('模擬考 · 結果', renderHome);
 
     el.view.appendChild(node('div', 'result-pct', `${r.total} / ${SCORING.totalMax}`));
@@ -315,7 +349,18 @@ function startExam(lessons) {
       '這份模擬考只涵蓋本課程教過的範圍（約 300 個單字），比真正的 N5 容易。' +
       '分數當參考就好，不要當預測。考前請務必做官方公布的樣題。'));
 
-    const again = node('button', 'primary wide', '再考一次');
+    if (wrong.length) {
+      const rev = node('button', 'primary wide', `檢討錯的 ${wrong.length} 題`);
+      rev.addEventListener('click', () => renderExamReview(finalRec, showResult));
+      el.view.appendChild(rev);
+      const n = wrong.filter((w) => w.wordId).length;
+      if (n) el.view.appendChild(node('p', 'note',
+        `錯的 ${n} 個單字已經放回複習排程，明天的複習卡會把它們推回來。`));
+    } else {
+      el.view.appendChild(node('p', 'result-msg', '全部答對，沒有錯題可以檢討。'));
+    }
+
+    const again = node('button', 'ghost wide', '再考一次');
     again.addEventListener('click', () => startExam(lessons));
     el.view.appendChild(again);
     const home = node('button', 'ghost wide', '回課程列表');
@@ -333,7 +378,7 @@ function renderExamChoices(q, done) {
     const b = node('button', 'choice');
     if (q.choiceKind === 'kana' || q.choiceKind === 'kanji') b.appendChild(jpPlain(c));
     else b.textContent = c;
-    b.addEventListener('click', () => done(i === q.answer));
+    b.addEventListener('click', () => done(i === q.answer, c));
     box.appendChild(b);
   });
   el.view.appendChild(box);
@@ -362,7 +407,8 @@ function renderExamOrder(q, done) {
       b.disabled = true; b.classList.add('used');
       chosen.push(tok); refresh();
       if (chosen.length === q.choices.length) {
-        done(chosen.map((c) => c.surface).join('') === q.solution.join(''));
+        const built2 = chosen.map((c) => c.surface).join('');
+        done(built2 === q.solution.join(''), built2);
       }
     });
     pool.appendChild(b);
@@ -370,6 +416,121 @@ function renderExamOrder(q, done) {
   refresh();
   el.view.appendChild(built);
   el.view.appendChild(pool);
+}
+
+// ── 模擬考錯題檢討 ──────────────────────────────────────
+// 考試中刻意不給對錯（真考試也不會給），所以錯的題目必須在考完之後交代清楚：
+// 題目長什麼樣、你選了什麼、正解是什麼、那句話是什麼意思。
+// 這裡跟考試中剛好相反——全部標假名，檢討階段讀不出來才是問題。
+
+function answerLine(label, text, cls, plain) {
+  const row = node('div', 'ri-line ' + cls);
+  row.appendChild(node('span', 'ri-label', label));
+  if (text == null) row.appendChild(node('span', 'ri-text none', '沒作答（時間到）'));
+  else if (plain) row.appendChild(node('span', 'ri-text', text));
+  else row.appendChild(jp(text, 'ri-text'));
+  return row;
+}
+
+function reviewItemCard(w, n) {
+  const card = node('div', 'review-item');
+
+  const head = node('div', 'ri-head');
+  head.appendChild(node('span', 'ri-no', String(n)));
+  head.appendChild(node('span', 'exam-kind', w.kind));
+  if (w.lesson) head.appendChild(node('span', 'ri-lesson', `第 ${w.lesson} 課`));
+  card.appendChild(head);
+
+  if (w.passage) {
+    card.appendChild(jp(w.passage, 'exam-passage'));
+    if (w.passageZh) card.appendChild(node('div', 'ri-zh', w.passageZh));
+  }
+  card.appendChild(node('div', 'ri-title', w.title));
+
+  if (w.audio) {
+    // 當時只有聲音的內容，這裡要看得到
+    card.appendChild(jp(w.audio, 'ri-stem'));
+    const play = node('button', 'audio-btn', '🔊 再聽一次');
+    play.addEventListener('click', () => speak(w.audio, 0.85));
+    card.appendChild(play);
+  } else if (w.stem) {
+    card.appendChild(jp(w.stem, 'ri-stem'));
+  }
+  if (w.reviewZh) card.appendChild(node('div', 'ri-zh', w.reviewZh));
+
+  const plainAnswer = w.choiceKind === 'text';      // 中文選項不要丟去斷詞
+  card.appendChild(answerLine('你選的', w.your, 'wrong', plainAnswer));
+  card.appendChild(answerLine('正解', w.right, 'right', plainAnswer));
+
+  // 單字題補上漢字＋讀音，句子題補上完整的原句
+  const extra = w.reviewJp || (w.revealJp && w.revealJp !== w.audio ? w.revealJp : null);
+  if (extra && extra !== w.right && extra !== w.stem) {
+    const box = node('div', 'ri-full');
+    box.appendChild(node('span', 'ri-label', w.wordId ? '這個字' : '原句'));
+    box.appendChild(jp(extra, 'ri-text'));
+    card.appendChild(box);
+  }
+  return card;
+}
+
+function renderExamReview(rec, back) {
+  setView('模擬考 · 錯題檢討', back);
+
+  el.view.appendChild(node('p', 'summary',
+    `${fmtDate(rec.date)}　${rec.total} / ${SCORING.totalMax}　錯 ${rec.wrong.length} 題`));
+
+  if (!rec.wrong.length) {
+    el.view.appendChild(node('p', 'result-msg', '這次沒有錯題。'));
+  }
+
+  let n = 0;
+  for (const sec of SECTIONS) {
+    const items = rec.wrong.filter((w) => w.section === sec.id);
+    if (!items.length) continue;
+    const got = (rec.sections || []).find((x) => x.id === sec.id);
+    const head = node('div', 'level-head');
+    head.appendChild(node('span', 'level-name', sec.name));
+    head.appendChild(node('span', 'level-note',
+      got ? `錯 ${items.length} 題 / 共 ${got.total} 題` : `錯 ${items.length} 題`));
+    el.view.appendChild(head);
+    for (const w of items) el.view.appendChild(reviewItemCard(w, ++n));
+  }
+
+  const wordIds = [...new Set(rec.wrong.map((w) => w.wordId).filter(Boolean))];
+  if (wordIds.length) {
+    const drill = node('button', 'primary wide', `馬上練這 ${wordIds.length} 個單字`);
+    drill.addEventListener('click', () => startExamWordDrill(rec, wordIds));
+    el.view.appendChild(drill);
+  }
+  const home = node('button', 'ghost wide', '回課程列表');
+  home.addEventListener('click', renderHome);
+  el.view.appendChild(home);
+}
+
+/** 只用模擬考錯掉的單字出一輪練習。算正式複習，會動排程。 */
+function startExamWordDrill(rec, wordIds) {
+  const passed = getLessons().filter((l) => (l.level || 'N5') === 'N5' && getLessonState(l.id).done);
+  const questions = buildReview(wordIds, passed, tokenizer);
+  if (!questions.length) return renderExamReview(rec, renderHome);
+
+  runQuiz({
+    title: '模擬考錯題 · 單字',
+    questions,
+    onBack: () => renderExamReview(rec, renderHome),
+    onFinish(correctCount, total) {
+      const pct = Math.round((correctCount / total) * 100);
+      setView('模擬考錯題 · 完成', renderHome);
+      el.view.appendChild(node('div', 'result-pct', `${pct}%`));
+      el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
+      el.view.appendChild(node('p', 'result-msg', '這一輪算正式複習，答錯的字很快會再回來。'));
+      const again = node('button', 'ghost wide', '回錯題檢討');
+      again.addEventListener('click', () => renderExamReview(rec, renderHome));
+      el.view.appendChild(again);
+      const home = node('button', 'ghost wide', '回課程列表');
+      home.addEventListener('click', renderHome);
+      el.view.appendChild(home);
+    },
+  });
 }
 
 // ── 聽力卡（首頁）────────────────────────────────────────
