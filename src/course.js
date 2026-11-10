@@ -5,13 +5,15 @@ import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
          enrollVocab, getDueVocabIds, getEnrolledVocabIds, getReviewSummary,
          getPlan, setPlan, clearPlan, countLessonsDone,
          getKanaState, recordKanaAttempt,
-         getExamResult, saveExamResult } from './progress.js?v=DEV';
+         getExamResult, saveExamResult,
+         getPackState, recordPackAttempt } from './progress.js?v=DEV';
 import { loadKana, getKanaSections, getKanaSection, buildKanaQuiz } from './kana.js?v=DEV';
 import { conjugate } from './conjugate.js?v=DEV';
 import { initSpeech, speak, stopSpeaking, speechAvailable, missingVoiceHelp } from './speech.js?v=DEV';
 import { loadExamData, buildExam, scoreExam, reviewRecord, SCORING, SECTIONS } from './exam.js?v=DEV';
 import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
-import { buildQuiz, buildReview, buildListeningQuiz } from './practice.js?v=DEV';
+import { buildQuiz, buildReview, buildListeningQuiz, buildPackQuiz } from './practice.js?v=DEV';
+import { loadPacks, getPacks, getPack } from './packs.js?v=DEV';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -66,6 +68,7 @@ function renderHome() {
 
   renderPlanCard();
   renderReviewCard(lessons);
+  renderPackCard();
   renderKanaCard();
   renderListeningCard(lessons);
   renderExamCard(lessons);
@@ -182,10 +185,16 @@ function renderExamCard(lessons) {
   const passed = n5.filter((l) => getLessonState(l.id).done);
   if (passed.length < n5.length) return;        // N5 全部上完才開放
 
+  const packWords = donePackWords();
   const card = node('div', 'exam-card');
-  card.appendChild(node('div', 'exam-title', 'N5 模擬考'));
+  card.appendChild(node('div', 'exam-title', '課程總考（N5 格式）'));
+  card.appendChild(node('div', 'exam-warn', '這個分數不能預測 JLPT 成績。'));
   card.appendChild(node('div', 'exam-sub',
-    '照正式考試的結構與計分：文字・語彙 20 分鐘、文法・読解 40 分鐘、聴解 30 分鐘，中途不給答案。'));
+    `出題範圍就是這個 APP 教過的字（課程 ${vocabUpTo(25).length} 個 ＋ 單字包 ${packWords.length} 個），`
+    + '沒教過的不會出現，所以它測的是「教過的東西記住了多少」。'
+    + '格式照官方的來，因為限時內寫完本身要練：'
+    + '文字・語彙 20 分鐘、文法・読解 40 分鐘、聴解 30 分鐘，中途不給答案。'));
+  card.appendChild(officialLink());
   if (!speechAvailable()) {
     card.appendChild(node('div', 'exam-warn', '這台裝置沒有日文語音，聴解那一節會跳過，無法判定及格。'));
   }
@@ -200,7 +209,7 @@ function renderExamCard(lessons) {
     card.appendChild(line);
   }
 
-  const btn = node('button', 'primary wide', '開始模擬考');
+  const btn = node('button', 'primary wide', '開始總考');
   btn.addEventListener('click', () => startExam(passed));
   card.appendChild(btn);
 
@@ -213,7 +222,7 @@ function renderExamCard(lessons) {
 }
 
 function startExam(lessons) {
-  const sections = buildExam(tokenizer, lessons, speechAvailable());
+  const sections = buildExam(tokenizer, lessons, speechAvailable(), donePackWords());
   const results = [];
   const wrong = [];          // 錯題與沒作答的題目，考完才拿出來檢討
   let finalRec = null;       // 算過一次就定案，回到結果頁不會重算、也不會重複扣複習格
@@ -221,7 +230,7 @@ function startExam(lessons) {
 
   function intro() {
     const sec = sections[si];
-    setView(`模擬考 · ${sec.name}`, null);
+    setView(`總考 · ${sec.name}`, null);
     el.view.appendChild(node('div', 'exam-step', `第 ${si + 1} 節 / ${sections.length}`));
     el.view.appendChild(node('h2', 'lesson-h2', sec.name));
     el.view.appendChild(node('p', 'goal',
@@ -229,7 +238,7 @@ function startExam(lessons) {
     const go = node('button', 'primary wide', '開始這一節');
     go.addEventListener('click', () => runSection(sec));
     el.view.appendChild(go);
-    const quit = node('button', 'ghost wide', '離開模擬考');
+    const quit = node('button', 'ghost wide', '離開總考');
     quit.addEventListener('click', renderHome);
     el.view.appendChild(quit);
   }
@@ -257,7 +266,7 @@ function startExam(lessons) {
     function show() {
       if (index >= sec.questions.length) return finishSection();
       const q = sec.questions[index];
-      setView(`模擬考 · ${sec.name}`, null);
+      setView(`總考 · ${sec.name}`, null);
 
       const bar = node('div', 'quiz-bar');
       const fill = node('div', 'quiz-bar-fill');
@@ -317,7 +326,7 @@ function startExam(lessons) {
       for (const w of wrong) if (w.wordId) recordAnswer(w.wordId, false);
     }
     const r = finalRec;
-    setView('模擬考 · 結果', renderHome);
+    setView('總考 · 結果', renderHome);
 
     el.view.appendChild(node('div', 'result-pct', `${r.total} / ${SCORING.totalMax}`));
     el.view.appendChild(node('div', 'exam-verdict ' + (r.passed ? 'pass' : 'fail'),
@@ -345,9 +354,14 @@ function startExam(lessons) {
     notes.push('任一區沒到及格線，總分再高也不合格——這是官方規則。');
     el.view.appendChild(node('p', 'result-msg', notes.join(' ')));
 
-    el.view.appendChild(node('p', 'note',
-      '這份模擬考只涵蓋本課程教過的範圍（約 300 個單字），比真正的 N5 容易。' +
-      '分數當參考就好，不要當預測。考前請務必做官方公布的樣題。'));
+    const warn = node('div', 'exam-disclaimer');
+    warn.appendChild(node('div', 'exam-disclaimer-t', '這個分數不能預測 JLPT'));
+    warn.appendChild(node('div', 'exam-disclaimer-b',
+      '題目全部從這個 APP 教過的字組出來，沒教過的不會出現，所以分數高只代表教過的都記住了。'
+      + `真正的 N5 要約 800 個單字，這裡目前有 ${vocabUpTo(25).length + donePackWords().length} 個。`
+      + '要知道自己實際到哪裡，請做官方問題例。'));
+    warn.appendChild(officialLink());
+    el.view.appendChild(warn);
 
     if (wrong.length) {
       const rev = node('button', 'primary wide', `檢討錯的 ${wrong.length} 題`);
@@ -418,7 +432,149 @@ function renderExamOrder(q, done) {
   el.view.appendChild(pool);
 }
 
-// ── 模擬考錯題檢討 ──────────────────────────────────────
+// ── 主題單字包 ──────────────────────────────────────────
+// 課程只教了 303 個字，N5 要約 800 個。差的幾百個字沒有文法可以掛，
+// 所以按主題分包：只背字、不教句型，背完一樣進間隔複習。
+
+/** 已完成的單字包裡的字，拿來當複習題的干擾選項來源 */
+function donePackWords() {
+  return getPacks().filter((p) => getPackState(p.id).done).flatMap((p) => p.words);
+}
+
+function packStats() {
+  const packs = getPacks();
+  const words = packs.reduce((a, p) => a + p.words.length, 0);
+  const donePacks = packs.filter((p) => getPackState(p.id).done);
+  const doneWords = donePacks.reduce((a, p) => a + p.words.length, 0);
+  return { packs, words, donePacks: donePacks.length, doneWords };
+}
+
+function renderPackCard() {
+  const { packs, words, donePacks, doneWords } = packStats();
+  if (!packs.length) return;
+
+  const card = node('div', 'pack-card');
+  card.appendChild(node('div', 'pack-title', '主題單字包'));
+  card.appendChild(node('div', 'pack-sub',
+    `${packs.length} 個主題、${words} 個新字，跟課程不重複。課程教的 303 個字離 N5 需要的約 800 個還差一段，缺口補在這裡。`));
+  card.appendChild(node('div', 'pack-progress',
+    donePacks ? `已完成 ${donePacks} / ${packs.length} 包（${doneWords} 個字）`
+              : '還沒開始'));
+  const btn = node('button', 'primary wide', donePacks ? '繼續背單字' : '開始背單字');
+  btn.addEventListener('click', renderPackList);
+  card.appendChild(btn);
+  el.view.appendChild(card);
+}
+
+function renderPackList() {
+  setView('主題單字包', renderHome);
+  const { packs, words, doneWords } = packStats();
+  el.view.appendChild(node('p', 'summary',
+    `${packs.length} 個主題、${words} 個字，已背 ${doneWords} 個。順序隨你，想先背哪個主題就點哪個。`));
+
+  for (const p of packs) {
+    const st = getPackState(p.id);
+    const card = node('button', 'lesson-card');
+    const head = node('div', 'lesson-head');
+    head.appendChild(node('span', 'lesson-no', `${p.words.length} 個字`));
+    if (st.done) head.appendChild(node('span', 'badge done', `最佳 ${st.best}%`));
+    else if (st.attempts) head.appendChild(node('span', 'badge', `最佳 ${st.best}%`));
+    card.appendChild(head);
+    card.appendChild(node('div', 'lesson-title', p.title));
+    card.appendChild(node('div', 'lesson-pattern', p.zh));
+    card.addEventListener('click', () => renderPack(p.id));
+    el.view.appendChild(card);
+  }
+}
+
+function renderPack(id) {
+  const p = getPack(id);
+  setView(p.title, renderPackList);
+  const st = getPackState(p.id);
+
+  el.view.appendChild(node('p', 'goal',
+    `${p.zh}　${p.words.length} 個字。先看過一遍再練習；答對 ${PASS_SCORE}% 以上算完成，` +
+    '這些字就會進每天的複習排程。'));
+
+  const table = node('div', 'pack-words');
+  for (const w of p.words) {
+    const row = node('div', 'pack-word');
+    // 讀音只靠上面的假名標註，不另外列一欄——
+    // 否則右上角那個「顯示假名」的開關關掉之後，讀音還是露在旁邊，就沒辦法自我測驗了
+    row.appendChild(jp(w.kanji || w.kana, 'pw-jp'));
+    row.appendChild(node('span', 'pw-zh', w.zh));
+    const say = node('button', 'pw-say', '🔊');
+    say.addEventListener('click', () => speak(w.kana, 0.85));
+    if (speechAvailable()) row.appendChild(say);
+    table.appendChild(row);
+  }
+  el.view.appendChild(table);
+
+  const btn = node('button', 'primary wide', st.attempts ? '再練一次' : '開始練習');
+  btn.addEventListener('click', () => startPackQuiz(p.id));
+  el.view.appendChild(btn);
+  const back = node('button', 'ghost wide', '回單字包列表');
+  back.addEventListener('click', renderPackList);
+  el.view.appendChild(back);
+}
+
+function startPackQuiz(id) {
+  const p = getPack(id);
+  const questions = buildPackQuiz(p.words);
+  if (!questions.length) return renderPack(id);
+
+  runQuiz({
+    title: p.title,
+    questions,
+    onBack: () => renderPack(id),
+    onFinish(correctCount, total) {
+      const pct = Math.round((correctCount / total) * 100);
+      const passed = pct >= PASS_SCORE;
+      recordPackAttempt(p.id, pct);
+      // 過了才納入複習：沒過就納入，等於把還沒記住的字塞進排程裡慢慢忘
+      if (passed) enrollVocab(p.words.map((w) => w.id), 1);
+
+      setView(`${p.title} · 完成`, renderPackList);
+      el.view.appendChild(node('div', 'result-pct', `${pct}%`));
+      el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
+      el.view.appendChild(node('p', 'result-msg',
+        passed ? `這一包完成了。${p.words.length} 個字已經進複習排程，明天會回來一次。`
+               : `還沒到 ${PASS_SCORE}%。回去把字再看一遍，這一包還沒進複習排程。`));
+
+      const again = node('button', 'primary wide', passed ? '再練一次' : '回去看單字');
+      again.addEventListener('click', () => (passed ? startPackQuiz(id) : renderPack(id)));
+      el.view.appendChild(again);
+      const list = node('button', 'ghost wide', '回單字包列表');
+      list.addEventListener('click', renderPackList);
+      el.view.appendChild(list);
+    },
+  });
+}
+
+/**
+ * 官方題目的連結。這個 APP 出的題都是自己教過的東西，真考題只有官方那份。
+ * 問題例每個大問只給一題，是用來看題型的；要整份練要用公式問題集。
+ */
+function officialLink() {
+  const box = node('div', 'official-links');
+  const link = (href, text, note) => {
+    const a = document.createElement('a');
+    a.className = 'official-link';
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = text;
+    box.appendChild(a);
+    if (note) box.appendChild(node('div', 'official-note', note));
+  };
+  link('https://www.jlpt.jp/samples/n5/index.html', '→ JLPT 官方 N5 問題例',
+       '免費。每個大問只有一題，看題型用的。');
+  link('https://www.jlpt.jp/samples/sampleindex.html', '→ 日本語能力試験 公式問題集',
+       '官方整份考卷。要估自己的實力就看這個。');
+  return box;
+}
+
+// ── 總考錯題檢討 ────────────────────────────────────────
 // 考試中刻意不給對錯（真考試也不會給），所以錯的題目必須在考完之後交代清楚：
 // 題目長什麼樣、你選了什麼、正解是什麼、那句話是什麼意思。
 // 這裡跟考試中剛好相反——全部標假名，檢討階段讀不出來才是問題。
@@ -474,7 +630,7 @@ function reviewItemCard(w, n) {
 }
 
 function renderExamReview(rec, back) {
-  setView('模擬考 · 錯題檢討', back);
+  setView('總考 · 錯題檢討', back);
 
   el.view.appendChild(node('p', 'summary',
     `${fmtDate(rec.date)}　${rec.total} / ${SCORING.totalMax}　錯 ${rec.wrong.length} 題`));
@@ -514,12 +670,12 @@ function startExamWordDrill(rec, wordIds) {
   if (!questions.length) return renderExamReview(rec, renderHome);
 
   runQuiz({
-    title: '模擬考錯題 · 單字',
+    title: '總考錯題 · 單字',
     questions,
     onBack: () => renderExamReview(rec, renderHome),
     onFinish(correctCount, total) {
       const pct = Math.round((correctCount / total) * 100);
-      setView('模擬考錯題 · 完成', renderHome);
+      setView('總考錯題 · 完成', renderHome);
       el.view.appendChild(node('div', 'result-pct', `${pct}%`));
       el.view.appendChild(node('div', 'result-detail', `答對 ${correctCount} / ${total} 題`));
       el.view.appendChild(node('p', 'result-msg', '這一輪算正式複習，答錯的字很快會再回來。'));
@@ -875,7 +1031,7 @@ function startQuiz(lesson) {
 // ── 自由練習：不看到期日，不動排程 ──────────────────────
 function startFreePractice(lessons) {
   const passed = lessons.filter((l) => getLessonState(l.id).done);
-  const questions = buildReview(getEnrolledVocabIds(), passed, tokenizer);
+  const questions = buildReview(getEnrolledVocabIds(), passed, tokenizer, donePackWords());
   if (!questions.length) return renderHome();
 
   runQuiz({
@@ -903,7 +1059,7 @@ function startFreePractice(lessons) {
 // ── 複習 ──────────────────────────────────────────────────
 function startReview(lessons) {
   const passed = lessons.filter((l) => getLessonState(l.id).done);
-  const questions = buildReview(getDueVocabIds(), passed, tokenizer);
+  const questions = buildReview(getDueVocabIds(), passed, tokenizer, donePackWords());
   if (!questions.length) return renderHome();
 
   runQuiz({
@@ -1012,7 +1168,7 @@ Promise.all([
     el.barFill.style.width = `${(loaded / total) * 100}%`;
     el.loadingTitle.textContent = `正在載入日文字典… ${mb(loaded)} / ${mb(total)} MB`;
   }),
-  loadCurriculum(),
+  loadCurriculum().then(loadPacks),   // 包的字要進單字索引，所以得等課程載好
   loadKana(),
   loadExamData(),
 ])

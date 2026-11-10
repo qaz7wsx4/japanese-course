@@ -621,3 +621,44 @@ button.link {
 .ri-line.wrong .ri-text { color: var(--pos-verb); }
 .ri-line.wrong .ri-text.none { color: var(--muted); font-size: 13px; }
 .ri-line.right .ri-text { color: var(--pos-adj); font-weight: 600; }
+
+/* ── 主題單字包 ── */
+.pack-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--pos-adverb);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 18px;
+}
+.pack-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.pack-sub { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.pack-progress { font-size: 13px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.pack-card .wide { margin-top: 12px; }
+
+.pack-words { margin: 16px 0 22px; }
+.pack-word {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.pack-word .pw-jp { font-size: 19px; line-height: 1.9; flex: 0 0 auto; }
+.pw-zh { font-size: 14px; margin-left: auto; text-align: right; }
+.pw-say {
+  flex: 0 0 auto; background: none; border: none; padding: 0 0 0 10px;
+  font-size: 15px; cursor: pointer; color: var(--muted);
+}
+
+.official-links { margin: 12px 0 2px; }
+.official-link {
+  display: block; color: var(--accent); font-size: 13px;
+  text-decoration: none; margin-top: 8px;
+}
+.official-note { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 2px; }
+.exam-disclaimer {
+  border: 1px solid var(--pos-verb);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 20px 0 4px;
+}
+.exam-disclaimer-t { font-size: 14px; font-weight: 600; color: var(--pos-verb); margin-bottom: 6px; }
+.exam-disclaimer-b { font-size: 13px; color: var(--muted); line-height: 1.75; }

@@ -15,6 +15,15 @@ export async function loadCurriculum() {
   return data;
 }
 
+/**
+ * 把主題單字包的字加進單字索引。
+ * 複習與 SRS 都靠 getVocab 查字，包裡的字不進索引就會在複習時變成空白題。
+ * 課程單字優先：同一個 id 不覆蓋。
+ */
+export function registerExtraVocab(words) {
+  for (const w of words) if (!vocabById.has(w.id)) vocabById.set(w.id, { ...w });
+}
+
 export const getLessons = () => data.lessons;
 export const getLesson = (id) => data.lessons.find((l) => l.id === Number(id));
 export const getVocab = (id) => vocabById.get(id);

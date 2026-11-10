@@ -10,9 +10,9 @@ export const PASS_SCORE = 70;
 function read() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null, ...s };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null, packs: {}, ...s };
   } catch {
-    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null, packs: {} };
   }
 }
 
@@ -150,6 +150,24 @@ export function getPlan() {
 export function setPlan(examDate, startDate) {
   const s = read();
   s.plan = { examDate, startDate };
+  write(s);
+}
+
+// ── 主題單字包 ────────────────────────────────────────────
+// 跟課程分開存。單字包沒有前後順序，不解鎖、不擋人，想先背哪個主題就背哪個。
+export function getPackState(id) {
+  return read().packs?.[id] || { done: false, best: 0, attempts: 0 };
+}
+
+export function recordPackAttempt(id, scorePct) {
+  const s = read();
+  s.packs = s.packs || {};
+  const prev = s.packs[id] || { done: false, best: 0, attempts: 0 };
+  s.packs[id] = {
+    done: prev.done || scorePct >= PASS_SCORE,
+    best: Math.max(prev.best, scorePct),
+    attempts: prev.attempts + 1,
+  };
   write(s);
 }
 

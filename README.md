@@ -7,9 +7,15 @@
 
 - **假名基礎**：清音、濁音・半濁音、拗音、促音・長音四節，表格＋練習。不擋課程進度，隨時可回來補。
 - **課程**（`index.html`）：一課一課學，每課 單字 → 文法 → 練習。練習達 70 分才解鎖下一課。
+- **主題單字包**：10 個主題、223 個字，補課程教不到的生活單字。背完一樣進間隔複習。
 - **自由閱讀**（`reader.html`）：貼上任何日文，自動斷詞、標假名（ふりがな）、詞性上色。
 
 介面與講解全為繁體中文。
+
+> **總考的分數不能預測 JLPT。** 題目一律從這個 App 教過的字組出來，沒教過的不會出現，
+> 所以它只能回答「教過的東西記住了多少」。真正的 N5 約需 800 個單字，這裡目前是
+> 303（課程）＋ 223（單字包）。要估實力請做 [JLPT 官方問題例](https://www.jlpt.jp/samples/n5/index.html)
+> 與[公式問題集](https://www.jlpt.jp/samples/sampleindex.html)。
 
 ## 跑起來
 
@@ -78,7 +84,8 @@
       kana.js           假名練習題產生器
       conjugate.js      動詞活用引擎（推導所有形態、產生套錯規則的干擾項）
       speech.js         日文語音合成（語音挑選、慢速、缺語音時的引導）
-      exam.js           模擬考組卷與計分（官方結構與及格線）
+      exam.js           課程總考組卷與計分（照官方結構與及格線）
+      packs.js          主題單字包
       plan.js           學習計畫與進度比對
       progress.js       進度與解鎖（localStorage）
       tokenizer.js      kuromoji 載入、斷詞、詞塊合併、讀音覆寫
@@ -89,7 +96,8 @@
     curriculum/
       lessons.json      課程內容
       kana.json         假名基礎（四節）
-      exam.json         模擬考的読解短文與即時応答
+      exam.json         總考的読解短文與即時応答
+      packs.json        主題單字包（10 個主題、223 個字）
     vendor/kuromoji/    kuromoji + 詞典（17 MB，離線用）
     devserver.py        本機開發伺服器
     sync-to-nas.sh      同步到自家 NAS（選用）

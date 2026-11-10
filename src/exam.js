@@ -1,12 +1,17 @@
-// N5 模擬考。
+// 課程總考（照 N5 的考試格式）。
 //
-// 依官方公布的結構組卷（jlpt.jp，2026-11 查證）：
+// **這不是模擬考，不要拿它預測 JLPT 成績。**
+// 出題池就是這個 APP 自己教過的字（課程 + 已完成的主題單字包），
+// 考出來的分數只能回答「教過的東西記住了多少」。
+// 真正要測實力，只有 jlpt.jp 公開的官方問題例與官方問題集，那才是真考題。
+//
+// 格式照官方公布的來（jlpt.jp，2026-11 查證），因為「在限時內把題目寫完」
+// 本身要練——分節時間、不給對錯、時間到自動交卷，這些跟真考試一樣：
 //   三節分開計時：文字・語彙 20 分／文法・読解 40 分／聴解 30 分
 //   計分分兩區：言語知識・読解 0–120（及格線 38）／聴解 0–60（及格線 19）
 //   總分 0–180，及格線 80。**三個條件要同時成立**，任一區沒過，總分再高也不及格。
 //
-// 題目從課程既有內容組出來，読解短文與即時応答另外寫在 curriculum/exam.json。
-// 本模擬考只涵蓋本課程教過的 N5 範圍，比真正的考題容易——結果只能當參考，不是預測。
+// 読解短文與即時応答寫在 curriculum/exam.json，其餘從課程內容自動組出來。
 
 import { vocabUpTo, wordForm } from './curriculum.js?v=DEV';
 import { analyze } from './tokenizer.js?v=DEV';
@@ -193,15 +198,16 @@ function buildListenSection(pool, quickResponse, count) {
 }
 
 /**
- * 組一份完整的模擬考。
+ * 組一份完整的考卷。
  * @param {object} tokenizer kuromoji
  * @param {object[]} lessons 已通過的 N5 課（題目只從學過的出）
  * @param {boolean} canListen 裝置有沒有日文語音；沒有的話聴解整節跳過
+ * @param {object[]} extraWords 已完成的主題單字包裡的字，一起進出題池
  */
-export function buildExam(tokenizer, lessons, canListen) {
+export function buildExam(tokenizer, lessons, canListen, extraWords = []) {
   window.__examTokenizer = tokenizer;        // 給上面幾個 builder 用
   const maxLesson = Math.max(...lessons.map((l) => l.id), 1);
-  const pool = vocabUpTo(maxLesson);
+  const pool = [...vocabUpTo(maxLesson), ...extraWords];
 
   const sections = [
     { ...SECTIONS[0], questions: buildVocabSection(pool, lessons, SECTIONS[0].count) },

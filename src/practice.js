@@ -52,17 +52,47 @@ export function buildQuiz(lesson, tokenizer) {
 }
 
 /**
+ * 產生一份主題單字包的練習。
+ * 干擾選項只從同一個包裡挑——同主題的詞（爸爸／媽媽／哥哥）才有鑑別力，
+ * 拿冰箱當「爸爸」的干擾項等於送分。
+ * @param {object[]} words 這個包的單字
+ * @param {number} max 這一輪最多幾題
+ */
+export function buildPackQuiz(words, max = 20) {
+  if (words.length < 4) return [];            // 選項湊不滿四個
+  const kinds = [readingQ, kana2kanjiQ, kana2zhQ, zh2kanaQ];
+  const out = [];
+  const used = new Set();                     // 同一個字不要用同一種問法問兩次
+  // 每個字先各問一次，還沒滿就換一種問法再跑一輪
+  for (let round = 0; round < kinds.length && out.length < max; round++) {
+    for (const [i, v] of shuffle(words).entries()) {
+      if (out.length >= max) break;
+      const q = kinds[(i + round) % kinds.length](v, words);
+      if (!q) continue;
+      const key = v.id + '/' + q.type;
+      if (used.has(key)) continue;
+      used.add(key);
+      out.push(q);
+    }
+  }
+  return shuffle(out).slice(0, max);
+}
+
+/**
  * 產生一份複習。
  * @param {string[]} dueIds 今天要複習的單字 id（已依不熟程度排序）
  * @param {object[]} passedLessons 已通過的課，用來抽句型題與干擾選項
+ * @param {object[]} extraPool 額外的干擾選項來源（已完成的主題單字包）。
+ *        包裡的字不在課程單字表裡，不加進來的話，「おかあさん」的干擾項
+ *        只能從課程單字挑，同主題的詞（おとうさん／おにいさん）反而選不到。
  */
-export function buildReview(dueIds, passedLessons, tokenizer) {
+export function buildReview(dueIds, passedLessons, tokenizer, extraPool = []) {
   const MAX_WORDS = 20;                       // 一次不要太多，寧可明天再來
   const words = dueIds.slice(0, MAX_WORDS).map(getVocab).filter(Boolean);
   if (!words.length) return [];
 
   const maxLesson = Math.max(...passedLessons.map((l) => l.id), 1);
-  const pool = vocabUpTo(maxLesson);
+  const pool = [...vocabUpTo(maxLesson), ...extraPool];
 
   // 幾種方向輪流問，避免只會「看得懂」不會「想得起來」
   const wordQs = words.map((v, i) => reviewQ(v, pool, i));
