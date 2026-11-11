@@ -662,3 +662,5 @@ button.link {
 }
 .exam-disclaimer-t { font-size: 14px; font-weight: 600; color: var(--pos-verb); margin-bottom: 6px; }
 .exam-disclaimer-b { font-size: 13px; color: var(--muted); line-height: 1.75; }
+.pw-kana { font-size: 12px; color: var(--muted); }
+body.hide-kana .pw-kana { visibility: hidden; }

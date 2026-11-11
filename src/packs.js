@@ -17,7 +17,9 @@ export async function loadPacks() {
   data = await res.json();
   const all = data.packs.flatMap((p) => p.words.map((w) => ({ ...w, pack: p.id })));
   registerExtraVocab(all);     // 讓複習與 SRS 查得到這些字
-  registerWords(all);          // 讓斷詞與標假名採用這裡寫的讀音
+  // 一字多讀的詞（一日＝ついたち／いちにち、辛い＝からい／つらい）標了 noForce，
+  // 當單字卡教、但不去覆寫斷詞讀音——覆寫會把別的句子讀錯。
+  registerWords(all.filter((w) => !w.noForce));
   return data;
 }
 

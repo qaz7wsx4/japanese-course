@@ -456,7 +456,9 @@ function renderPackCard() {
   const card = node('div', 'pack-card');
   card.appendChild(node('div', 'pack-title', '主題單字包'));
   card.appendChild(node('div', 'pack-sub',
-    `${packs.length} 個主題、${words} 個新字，跟課程不重複。課程教的 303 個字離 N5 需要的約 800 個還差一段，缺口補在這裡。`));
+    `${packs.length} 個主題、${words} 個新字，跟課程不重複。`
+    + `課程 ${vocabUpTo(25).length} 個 ＋ 這裡 ${words} 個 ＝ ${vocabUpTo(25).length + words} 個，`
+    + 'N5 需要約 800 個。只背字、不教句型，背完一樣進每天的複習。'));
   card.appendChild(node('div', 'pack-progress',
     donePacks ? `已完成 ${donePacks} / ${packs.length} 包（${doneWords} 個字）`
               : '還沒開始'));
@@ -499,9 +501,16 @@ function renderPack(id) {
   const table = node('div', 'pack-words');
   for (const w of p.words) {
     const row = node('div', 'pack-word');
-    // 讀音只靠上面的假名標註，不另外列一欄——
-    // 否則右上角那個「顯示假名」的開關關掉之後，讀音還是露在旁邊，就沒辦法自我測驗了
-    row.appendChild(jp(w.kanji || w.kana, 'pw-jp'));
+    // 讀音靠假名標註，不另外列一欄——否則右上角「顯示假名」的開關關掉之後，
+    // 讀音還是露在旁邊，就沒辦法自我測驗了。
+    // 但 noForce 的詞（一日＝ついたち／いちにち）斷詞器標出來的讀音正是錯的那個，
+    // 所以這些詞不標假名，改用一個會跟著開關一起隱藏的欄位寫清楚。
+    if (w.noForce) {
+      row.appendChild(jpPlain(w.kanji || w.kana, 'pw-jp'));
+      row.appendChild(node('span', 'pw-kana', w.kana));
+    } else {
+      row.appendChild(jp(w.kanji || w.kana, 'pw-jp'));
+    }
     row.appendChild(node('span', 'pw-zh', w.zh));
     const say = node('button', 'pw-say', '🔊');
     say.addEventListener('click', () => speak(w.kana, 0.85));

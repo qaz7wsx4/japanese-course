@@ -61,7 +61,7 @@ export function buildQuiz(lesson, tokenizer) {
 export function buildPackQuiz(words, max = 20) {
   if (words.length < 4) return [];            // 選項湊不滿四個
   const kinds = [readingQ, kana2kanjiQ, kana2zhQ, zh2kanaQ];
-  const out = [];
+  const out = [...packDrillQuestions(words, 5)];
   const used = new Set();                     // 同一個字不要用同一種問法問兩次
   // 每個字先各問一次，還沒滿就換一種問法再跑一輪
   for (let round = 0; round < kinds.length && out.length < max; round++) {
@@ -76,6 +76,34 @@ export function buildPackQuiz(words, max = 20) {
     }
   }
   return shuffle(out).slice(0, max);
+}
+
+/**
+ * 單字包裡的動詞也要練活用，只背ます形等於只學了一半。
+ * 只出 て形／た形／ない形／辞書形——可能形與意向形套在自動詞上
+ * 會生出「見えられます」「咲けます」這種機械上正確、意思上不通的形，
+ * 那是課程用 lesson.drill 指定形態才能避開的，單字包沒有那個資訊。
+ */
+function packDrillQuestions(words, want) {
+  const SAFE_FORMS = ['te', 'ta', 'nai', 'dict'];
+  // noForce 的動詞（開きます＝あきます／ひらきます）不出活用題：
+  // 題目會用 jp() 標假名，而它的讀音正是我們刻意不去覆寫的那個。
+  const verbs = words.filter((v) => v.group && !v.noForce);
+  if (verbs.length < 4) return [];
+  const out = [];
+  for (const [i, v] of sample(verbs, want).entries()) {
+    const form = SAFE_FORMS[i % SAFE_FORMS.length];
+    const correct = conjugate(v)[form].kanji;
+    const wrongs = wrongForms(v, form).slice(0, 3);
+    if (wrongs.length < 3) continue;
+    const opts = shuffle([correct, ...wrongs]);
+    out.push({
+      type: 'drill-' + form, title: `把它變成${FORM_LABEL[form]}`,
+      promptJp: v.kanji || v.kana, choices: opts, answer: opts.indexOf(correct),
+      choiceKind: 'kanji', vocabId: null,      // 活用答錯不代表忘了單字，不動複習排程
+    });
+  }
+  return out;
 }
 
 /**
