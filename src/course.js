@@ -6,7 +6,8 @@ import { getLessonState, recordAttempt, recordAnswer, isUnlocked, PASS_SCORE,
          getPlan, setPlan, clearPlan, countLessonsDone,
          getKanaState, recordKanaAttempt,
          getExamResult, saveExamResult,
-         getPackState, recordPackAttempt } from './progress.js?v=DEV';
+         getPackState, recordPackAttempt,
+         getPapers, addPaperResult, removePaperResult } from './progress.js?v=DEV';
 import { loadKana, getKanaSections, getKanaSection, buildKanaQuiz } from './kana.js?v=DEV';
 import { conjugate } from './conjugate.js?v=DEV';
 import { initSpeech, speak, stopSpeaking, speechAvailable, missingVoiceHelp } from './speech.js?v=DEV';
@@ -14,6 +15,7 @@ import { loadExamData, buildExam, scoreExam, reviewRecord, SCORING, SECTIONS } f
 import { PHASES, TOTAL_LESSONS, computePace, upcomingExamDates, localDate } from './plan.js?v=DEV';
 import { buildQuiz, buildReview, buildListeningQuiz, buildPackQuiz } from './practice.js?v=DEV';
 import { loadPacks, getPacks, getPack } from './packs.js?v=DEV';
+import { PAPER, partKey, scorePaper } from './paper.js?v=DEV';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -72,6 +74,7 @@ function renderHome() {
   renderKanaCard();
   renderListeningCard(lessons);
   renderExamCard(lessons);
+  renderPaperCard();
 
   renderLessonList(n5);
 
@@ -558,6 +561,318 @@ function startPackQuiz(id) {
       el.view.appendChild(list);
     },
   });
+}
+
+// ── 官方紙本考卷 ────────────────────────────────────────
+// 官方題目不能複製進 APP（公式問題集是 JEES 的著作，官網問題例也不能散佈），
+// 所以這裡做的是紙本做不到的事：照官方時間計時，並把紙上的結果變成
+// 「哪個大問弱」的資料。刻意不換算 /180——JLPT 是等化計分，那個數字推不出來。
+
+const pct = (r) => (r == null ? '—' : `${Math.round(r * 100)}%`);
+const fmtDateTime = (iso) => {
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+function renderPaperCard() {
+  const papers = getPapers();
+  const card = node('div', 'paper-card');
+  card.appendChild(node('div', 'paper-title', '官方考卷計分'));
+  card.appendChild(node('div', 'paper-sub',
+    '官方題目不能放進這個 APP，但你手上的紙本可以交給它管：照官方時間分節計時，'
+    + '考完按大問輸入答對幾題，它會算出每個大問的正確率、指出最弱的那一個，並記錄歷次變化。'));
+  card.appendChild(officialLink());
+
+  if (papers.length) {
+    const last = papers[0];
+    const line = node('div', 'paper-last');
+    line.appendChild(node('span', 'paper-last-name', last.name));
+    line.appendChild(node('span', 'paper-last-rate', pct(last.rate)));
+    card.appendChild(line);
+  }
+
+  const btn = node('button', 'primary wide', '開始一份紙本考卷');
+  btn.addEventListener('click', renderPaperIntro);
+  card.appendChild(btn);
+  if (papers.length) {
+    const hist = node('button', 'ghost wide', `看紀錄（${papers.length} 份）`);
+    hist.addEventListener('click', renderPaperHistory);
+    card.appendChild(hist);
+  }
+  el.view.appendChild(card);
+}
+
+function renderPaperIntro() {
+  setView('官方考卷', renderHome);
+  el.view.appendChild(node('p', 'goal',
+    '題目用你手上的紙本（或官網的問題例），在紙上作答。這裡只負責計時與計分。'));
+
+  const nameWrap = node('div', 'paper-field');
+  nameWrap.appendChild(node('label', 'paper-label', '這是哪一份考卷'));
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'paper-input wide-input';
+  nameInput.placeholder = '例：公式問題集 Vol.2';
+  nameInput.value = '公式問題集';
+  nameWrap.appendChild(nameInput);
+  el.view.appendChild(nameWrap);
+
+  const table = node('div', 'paper-plan');
+  for (const sec of PAPER) {
+    const row = node('div', 'paper-plan-row');
+    row.appendChild(node('span', 'pp-name', sec.name));
+    row.appendChild(node('span', 'pp-min', `${sec.minutes} 分`));
+    row.appendChild(node('span', 'pp-parts', `大問 1〜${sec.parts.length}`));
+    table.appendChild(row);
+  }
+  el.view.appendChild(table);
+
+  const go = node('button', 'primary wide', '開始計時');
+  go.addEventListener('click', () => runPaperTimer(nameInput.value.trim() || '官方考卷', 0));
+  el.view.appendChild(go);
+
+  const skip = node('button', 'ghost wide', '已經考完了，直接輸入成績');
+  skip.addEventListener('click', () => renderPaperEntry(nameInput.value.trim() || '官方考卷'));
+  el.view.appendChild(skip);
+
+  const back = node('button', 'ghost wide', '回首頁');
+  back.addEventListener('click', renderHome);
+  el.view.appendChild(back);
+}
+
+/** 一節一節計時。時間到不自動跳下一節——紙本還要收拾，讓人自己按。 */
+function runPaperTimer(name, si) {
+  const sec = PAPER[si];
+  setView(`${sec.name}`, null);
+  el.view.appendChild(node('div', 'exam-step', `第 ${si + 1} 節 / ${PAPER.length}`));
+  el.view.appendChild(node('h2', 'lesson-h2', sec.name));
+  el.view.appendChild(node('p', 'goal',
+    `限時 ${sec.minutes} 分鐘，大問 1〜${sec.parts.length}。在紙上作答，時間到這裡會響一聲。`));
+
+  const clock = node('div', 'paper-clock');
+  el.view.appendChild(clock);
+
+  let remain = sec.minutes * 60000;
+  let last = Date.now();
+  let running = true;
+  let done = false;
+  let ticker = null;
+
+  const draw = () => {
+    const m = Math.floor(remain / 60000);
+    const s2 = Math.floor((remain % 60000) / 1000);
+    clock.textContent = `${m}:${String(s2).padStart(2, '0')}`;
+    clock.classList.toggle('low', remain < 120000);
+    clock.classList.toggle('over', remain <= 0);
+  };
+
+  const stop = () => { if (ticker) clearInterval(ticker); ticker = null; };
+
+  const tick = () => {
+    const now = Date.now();
+    if (running) remain = Math.max(0, remain - (now - last));
+    last = now;
+    draw();
+    if (remain <= 0 && !done) {
+      done = true;
+      running = false;
+      stop();
+      clock.textContent = '時間到';
+      if (speechAvailable()) speak('時間です。', 1);
+      pauseBtn.hidden = true;
+    }
+  };
+
+  const pauseBtn = node('button', 'ghost wide', '暫停');
+  pauseBtn.addEventListener('click', () => {
+    running = !running;
+    last = Date.now();
+    pauseBtn.textContent = running ? '暫停' : '繼續';
+  });
+  el.view.appendChild(pauseBtn);
+
+  const next = node('button', 'primary wide',
+    si + 1 < PAPER.length ? '這一節做完了，下一節' : '全部做完了，輸入成績');
+  next.addEventListener('click', () => {
+    stop();
+    if (si + 1 < PAPER.length) runPaperTimer(name, si + 1);
+    else renderPaperEntry(name);
+  });
+  el.view.appendChild(next);
+
+  const quit = node('button', 'ghost wide', '放棄這一份');
+  quit.addEventListener('click', () => { stop(); renderHome(); });
+  el.view.appendChild(quit);
+
+  draw();
+  ticker = setInterval(tick, 250);
+}
+
+function renderPaperEntry(name, prefill = {}) {
+  setView('輸入成績', renderHome);
+  el.view.appendChild(node('p', 'goal',
+    `${name}：對照紙本的答案，按大問填「答對幾題 / 共幾題」。`
+    + '官方不公布每個大問的題數，所以題數也要你填。沒做的大問留空就好。'));
+
+  const inputs = {};
+  for (const sec of PAPER) {
+    const head = node('div', 'level-head');
+    head.appendChild(node('span', 'level-name', sec.name));
+    head.appendChild(node('span', 'level-note', `${sec.minutes} 分`));
+    el.view.appendChild(head);
+
+    for (const p of sec.parts) {
+      const key = partKey(sec.id, p.n);
+      const row = node('div', 'paper-entry');
+      const label = node('div', 'pe-label');
+      label.appendChild(node('span', 'pe-n', `問題${p.n}`));
+      label.appendChild(node('span', 'pe-name', p.name));
+      label.appendChild(node('span', 'pe-aim', p.aim));
+      row.appendChild(label);
+
+      const nums = node('div', 'pe-nums');
+      const mk = (ph, val) => {
+        const i = document.createElement('input');
+        i.type = 'number';
+        i.min = '0';
+        i.inputMode = 'numeric';
+        i.className = 'paper-input';
+        i.placeholder = ph;
+        if (val != null) i.value = val;
+        return i;
+      };
+      const c = mk('對', prefill[key]?.correct);
+      const t = mk('共', prefill[key]?.total);
+      nums.append(c, node('span', 'pe-slash', '/'), t);
+      row.appendChild(nums);
+      inputs[key] = { c, t };
+      el.view.appendChild(row);
+    }
+  }
+
+  const err = node('p', 'paper-error');
+  err.hidden = true;
+  el.view.appendChild(err);
+
+  const save = node('button', 'primary wide', '算出結果');
+  save.addEventListener('click', () => {
+    const entries = {};
+    for (const [key, io] of Object.entries(inputs)) {
+      const total = Number(io.t.value) || 0;
+      const correct = Number(io.c.value) || 0;
+      if (!total) continue;
+      if (correct > total) {
+        err.hidden = false;
+        err.textContent = '有一個大問的「答對」比「共幾題」還多，檢查一下。';
+        io.c.focus();
+        return;
+      }
+      entries[key] = { correct, total };
+    }
+    if (!Object.keys(entries).length) {
+      err.hidden = false;
+      err.textContent = '至少填一個大問的題數。';
+      return;
+    }
+    const r = scorePaper(entries);
+    const rec = { at: new Date().toISOString(), name, entries, rate: r.rate,
+                  correct: r.correct, total: r.total };
+    addPaperResult(rec);
+    renderPaperResult(rec);
+  });
+  el.view.appendChild(save);
+
+  const back = node('button', 'ghost wide', '回首頁');
+  back.addEventListener('click', renderHome);
+  el.view.appendChild(back);
+}
+
+function renderPaperResult(rec) {
+  const r = scorePaper(rec.entries);
+  setView('官方考卷 · 結果', renderHome);
+  el.view.appendChild(node('div', 'result-pct', pct(r.rate)));
+  el.view.appendChild(node('div', 'result-detail',
+    `${rec.name}　答對 ${r.correct} / ${r.total} 題`));
+
+  for (const sec of r.sections) {
+    if (!sec.total) continue;
+    const head = node('div', 'level-head');
+    head.appendChild(node('span', 'level-name', sec.name));
+    head.appendChild(node('span', 'level-note', `${sec.correct} / ${sec.total}　${pct(sec.rate)}`));
+    el.view.appendChild(head);
+
+    for (const p of sec.parts) {
+      if (!p.total) continue;
+      const row = node('div', 'paper-bar-row' + (r.weakest && r.weakest.name === p.name ? ' weak' : ''));
+      const top = node('div', 'pb-top');
+      top.appendChild(node('span', 'pb-name', `問題${p.n}　${p.name}`));
+      top.appendChild(node('span', 'pb-num', `${p.correct} / ${p.total}`));
+      row.appendChild(top);
+      const bar = node('div', 'pb-bar');
+      const fill = node('div', 'pb-fill');
+      fill.style.width = `${Math.round(p.rate * 100)}%`;
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      el.view.appendChild(row);
+    }
+  }
+
+  if (r.weakest) {
+    el.view.appendChild(node('p', 'result-msg',
+      `最弱的是「${r.weakest.section}　問題${r.weakest.n}　${r.weakest.name}」`
+      + `（${r.weakest.correct} / ${r.weakest.total}）。${r.weakest.aim}。`));
+  }
+
+  const warn = node('div', 'exam-disclaimer');
+  warn.appendChild(node('div', 'exam-disclaimer-t', '這裡沒有 /180 的分數，是故意的'));
+  warn.appendChild(node('div', 'exam-disclaimer-b',
+    'JLPT 用等化計分，同一題在不同場次的權重不同，從答對率推不出總分——'
+    + '推出來的數字是編的。答對率與各大問的落差才是真的，拿它決定接下來練什麼。'));
+  el.view.appendChild(warn);
+
+  const again = node('button', 'ghost wide', '改一下剛才填的數字');
+  again.addEventListener('click', () => {
+    removePaperResult(rec.at);
+    renderPaperEntry(rec.name, rec.entries);
+  });
+  el.view.appendChild(again);
+  const hist = node('button', 'ghost wide', '看全部紀錄');
+  hist.addEventListener('click', renderPaperHistory);
+  el.view.appendChild(hist);
+  const home = node('button', 'ghost wide', '回首頁');
+  home.addEventListener('click', renderHome);
+  el.view.appendChild(home);
+}
+
+function renderPaperHistory() {
+  const papers = getPapers();
+  setView('官方考卷 · 紀錄', renderHome);
+  if (!papers.length) {
+    el.view.appendChild(node('p', 'result-msg', '還沒有紀錄。'));
+  }
+  el.view.appendChild(node('p', 'summary',
+    '每個大問的正確率擺在一起看，才知道哪裡在進步、哪裡卡住。'));
+
+  for (const rec of papers) {
+    const r = scorePaper(rec.entries);
+    const card = node('button', 'lesson-card');
+    const head = node('div', 'lesson-head');
+    head.appendChild(node('span', 'lesson-no', fmtDateTime(rec.at)));
+    head.appendChild(node('span', 'badge', pct(r.rate)));
+    card.appendChild(head);
+    card.appendChild(node('div', 'lesson-title', rec.name));
+    card.appendChild(node('div', 'lesson-pattern',
+      r.sections.filter((s) => s.total)
+        .map((s) => `${s.name.replace('言語知識', '').replace(/[（）]/g, '')} ${pct(s.rate)}`)
+        .join('　')));
+    card.addEventListener('click', () => renderPaperResult(rec));
+    el.view.appendChild(card);
+  }
+
+  const back = node('button', 'ghost wide', '回首頁');
+  back.addEventListener('click', renderHome);
+  el.view.appendChild(back);
 }
 
 /**

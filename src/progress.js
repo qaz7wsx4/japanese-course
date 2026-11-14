@@ -10,9 +10,11 @@ export const PASS_SCORE = 70;
 function read() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null, packs: {}, ...s };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {},
+             exam: null, packs: {}, papers: [], ...s };
   } catch {
-    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {}, exam: null, packs: {} };
+    return { lessons: {}, vocab: {}, srs: {}, plan: null, kana: {},
+             exam: null, packs: {}, papers: [] };
   }
 }
 
@@ -168,6 +170,25 @@ export function recordPackAttempt(id, scorePct) {
     best: Math.max(prev.best, scorePct),
     attempts: prev.attempts + 1,
   };
+  write(s);
+}
+
+// ── 官方紙本考卷的紀錄 ────────────────────────────────────
+// 這個留全部歷史（不像總考只留最後一次）：紙本考卷一份只能考一次，
+// 考第二份時要能看出「読解有沒有進步」，那就需要前幾次的紀錄。
+export function getPapers() {
+  return read().papers || [];
+}
+
+export function addPaperResult(rec) {
+  const s = read();
+  s.papers = [rec, ...(s.papers || [])].slice(0, 20);
+  write(s);
+}
+
+export function removePaperResult(at) {
+  const s = read();
+  s.papers = (s.papers || []).filter((r) => r.at !== at);
   write(s);
 }
 
