@@ -197,6 +197,9 @@ function renderExamCard(lessons) {
     + '沒教過的不會出現，所以它測的是「教過的東西記住了多少」。'
     + '格式照官方的來，因為限時內寫完本身要練：'
     + '文字・語彙 20 分鐘、文法・読解 40 分鐘、聴解 30 分鐘，中途不給答案。'));
+  card.appendChild(node('div', 'exam-sub',
+    '官方 14 個大問裡出 12 個：文字・語彙 4／4、文法・読解 6／6、聴解 2／4。'
+    + '聴解缺的「発話表現」要配插圖、「ポイント理解」要放對話錄音，這兩個只能用官方題目練。'));
   card.appendChild(officialLink());
   if (!speechAvailable()) {
     card.appendChild(node('div', 'exam-warn', '這台裝置沒有日文語音，聴解那一節會跳過，無法判定及格。'));

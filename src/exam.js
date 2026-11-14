@@ -11,7 +11,15 @@
 //   計分分兩區：言語知識・読解 0–120（及格線 38）／聴解 0–60（及格線 19）
 //   總分 0–180，及格線 80。**三個條件要同時成立**，任一區沒過，總分再高也不及格。
 //
-// 読解短文與即時応答寫在 curriculum/exam.json，其餘從課程內容自動組出來。
+// 官方 N5 共 14 個大問，這裡出 12 個：
+//   文字・語彙 4/4：漢字読み／表記／文脈規定／言い換え類義
+//   文法・読解 6/6：文の文法1／文の文法2／文章の文法／内容理解（短文）／内容理解（中文）／情報検索
+//   聴解 2/4：課題理解／即時応答
+// 聴解缺的兩個是硬限制：発話表現 要配插圖，ポイント理解 要先給提示再放一段對話，
+// 兩者都需要這個 APP 沒有的素材（圖、對話錄音）。這兩個大問只能在官方題目上練。
+// 単字題與助詞題從課程內容自動組出來；需要「意思相近」或整段脈絡判斷的
+// （言い換え類義、文章の文法、読解、情報検索、即時応答）沒辦法自動生成，手寫在
+// curriculum/exam.json。
 
 import { vocabUpTo, wordForm } from './curriculum.js?v=DEV';
 import { analyze } from './tokenizer.js?v=DEV';
@@ -84,20 +92,33 @@ function posOf(v, tokenizer) {
   return posCache.get(key);
 }
 
-/** 第一節：文字・語彙。漢字読み／表記／文脈規定／言い換え類義 */
-function buildVocabSection(pool, lessons, count) {
+/**
+ * 第一節：文字・語彙。官方四個大問都出：
+ *   問題1 漢字読み／問題2 表記／問題3 文脈規定／問題4 言い換え類義
+ */
+function buildVocabSection(pool, lessons, count, paraphrase) {
   const kanjiWords = pool.filter((v) => v.kanji);
   const out = [];
 
+  // 言い換え類義：給一句話，選意思最接近的另一句。
+  // 這是手寫題庫（curriculum/exam.json），因為「意思相近」沒辦法從單字表自動長出來。
+  for (const q of sample(paraphrase, Math.ceil(count * 0.25))) {
+    const opts = shuffle([q.same, ...q.wrong]);
+    out.push({ kind: '言い換え類義', stem: q.jp, stemPlain: true,
+               title: 'だいたい同じ意味の文はどれ？',
+               choices: opts, answer: opts.indexOf(q.same),
+               choiceKind: 'kanji', reviewZh: q.zh });
+  }
+
   // 漢字読み：給漢字選讀音。干擾項挑讀音相近的
-  for (const v of sample(kanjiWords, Math.ceil(count * 0.35))) {
+  for (const v of sample(kanjiWords, Math.ceil(count * 0.3))) {
     const o = pickOptions(v.kana, kanjiWords.map((x) => x.kana), 3, similarKana(v.kana));
     if (o) out.push({ kind: '漢字読み', stem: v.kanji, stemPlain: true,
                       title: 'この言葉の読み方は？', ...o, choiceKind: 'kana',
                       wordId: v.id, lesson: v.lesson, reviewJp: wordForm(v), reviewZh: v.zh });
   }
   // 表記：給假名選漢字。干擾項優先挑共用漢字的
-  for (const v of sample(kanjiWords, Math.ceil(count * 0.25))) {
+  for (const v of sample(kanjiWords, Math.ceil(count * 0.2))) {
     const o = pickOptions(v.kanji, kanjiWords.map((x) => x.kanji), 3, similarKanji(v.kanji));
     if (o) out.push({ kind: '表記', stem: v.kana, stemPlain: true,
                       title: 'この言葉の漢字は？', ...o, choiceKind: 'kanji',
@@ -126,14 +147,18 @@ function buildVocabSection(pool, lessons, count) {
   return shuffle(out).slice(0, count);
 }
 
-/** 第二節：文法・読解。文法形式／文の組み立て／読解 */
-function buildGrammarSection(pool, lessons, reading, count) {
+/**
+ * 第二節：文法・読解。官方六個大問都出：
+ *   問題1 文の文法1（文法形式の判断）／問題2 文の文法2（文の組み立て）／
+ *   問題3 文章の文法／問題4 内容理解（短文）／問題5 内容理解（中文）／問題6 情報検索
+ */
+function buildGrammarSection(pool, lessons, data, count) {
   const out = [];
   const exs = shuffle(lessons.flatMap((l) => l.grammar.flatMap((g) => g.examples)).filter((e) => !e.noQuiz));
 
   // 文法形式の判断：助詞填空
   for (const ex of exs) {
-    if (out.length >= Math.floor(count * 0.45)) break;
+    if (out.length >= Math.floor(count * 0.3)) break;
     const toks = analyze(window.__examTokenizer, ex.jp)[0] || [];
     const spots = toks.filter((t) => t.pos === 'particle' && CORE_PARTICLES.includes(t.surface));
     if (!spots.length) continue;
@@ -148,7 +173,7 @@ function buildGrammarSection(pool, lessons, reading, count) {
 
   // 文の組み立て：把打散的詞排回去
   for (const ex of exs) {
-    if (out.length >= Math.floor(count * 0.7)) break;
+    if (out.length >= Math.floor(count * 0.5)) break;
     const toks = (analyze(window.__examTokenizer, ex.jp)[0] || []).filter((t) => t.pos !== 'symbol');
     if (toks.length < 4 || toks.length > 7) continue;
     const correct = toks.map((t) => t.surface);
@@ -159,15 +184,31 @@ function buildGrammarSection(pool, lessons, reading, count) {
                reviewJp: ex.jp, reviewZh: ex.zh });
   }
 
-  // 読解：短文＋設問
+  // 文章の文法：短文裡挖掉一句或一個接續詞，看整段的流向
+  for (const t of shuffle(data.textGrammar)) {
+    if (out.length >= Math.floor(count * 0.65)) break;
+    for (const b of t.blanks) {
+      if (out.length >= Math.floor(count * 0.65)) break;
+      out.push({ kind: '文章の文法', passage: t.text, stem: `【${b.n}】に入るものは？`,
+                 stemPlain: true, title: '文章の流れに合うものを選んでください',
+                 choices: b.choices, answer: b.answer,
+                 choiceKind: 'kanji', reviewZh: b.zh, passageZh: t.zh });
+    }
+  }
+
+  // 読解（短文・中文）與 情報検索：兩種素材交錯放，不要讓同一篇的題目連在一起
+  const passages = shuffle([
+    ...data.reading.map((p) => ({ ...p, kind: '読解', title: '本文を読んで答えてください' })),
+    ...data.info.map((p) => ({ ...p, kind: '情報検索', title: 'お知らせを読んで答えてください' })),
+  ]);
   const need = count - out.length;
   let added = 0;
-  for (const p of shuffle(reading)) {
+  for (const p of passages) {
     if (added >= need) break;
     for (const q of p.questions) {
       if (added >= need) break;
-      out.push({ kind: '読解', passage: p.text, stem: q.q, stemPlain: false,
-                 title: '本文を読んで答えてください', choices: q.choices, answer: q.answer,
+      out.push({ kind: p.kind, passage: p.text, stem: q.q, stemPlain: false,
+                 title: p.title, choices: q.choices, answer: q.answer,
                  choiceKind: 'kana', reviewZh: q.zh, passageZh: p.zh });
       added++;
     }
@@ -210,8 +251,8 @@ export function buildExam(tokenizer, lessons, canListen, extraWords = []) {
   const pool = [...vocabUpTo(maxLesson), ...extraWords];
 
   const sections = [
-    { ...SECTIONS[0], questions: buildVocabSection(pool, lessons, SECTIONS[0].count) },
-    { ...SECTIONS[1], questions: buildGrammarSection(pool, lessons, examData.reading, SECTIONS[1].count) },
+    { ...SECTIONS[0], questions: buildVocabSection(pool, lessons, SECTIONS[0].count, examData.paraphrase) },
+    { ...SECTIONS[1], questions: buildGrammarSection(pool, lessons, examData, SECTIONS[1].count) },
   ];
   if (canListen) {
     sections.push({ ...SECTIONS[2], questions: buildListenSection(pool, examData.quickResponse, SECTIONS[2].count) });
